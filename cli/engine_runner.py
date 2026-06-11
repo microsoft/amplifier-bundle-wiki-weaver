@@ -37,7 +37,15 @@ PIPELINE_DIR = WIKI_WEAVER_ROOT / "pipeline"
 INNER_DOT = PIPELINE_DIR / "wiki-weaver-inner.dot"
 SCHEMA_PATH = PIPELINE_DIR / "SCHEMA.md"
 VALIDATE_PY = PIPELINE_DIR / "validate_wiki.py"
+# RESERVED FOR EVAL GRADING ONLY. The scenario rubric grades the WHOLE finished
+# corpus wiki (all sources, the A/B test). It is the WRONG bar for the inner
+# per-source loop: a single freshly-ingested article can never satisfy
+# whole-corpus completeness, so assess would vote `refine` forever. Do NOT point
+# the pipeline `assess` node at this -- it uses CONVERGENCE_RUBRIC_PATH below.
 RUBRIC_PATH = WIKI_WEAVER_ROOT / "eval" / "scenario-01-llm-wiki" / "rubric.md"
+# The pipeline `assess` gate's PER-SOURCE convergence rubric. Judges "is THIS
+# one source well integrated?" -- the correct, achievable bar for the inner loop.
+CONVERGENCE_RUBRIC_PATH = PIPELINE_DIR / "CONVERGENCE_RUBRIC.md"
 
 # The attractor-pipeline bundle: composes the loop-pipeline orchestrator,
 # context-simple, the anthropic provider, filesystem/bash/search tools, and the
@@ -157,6 +165,11 @@ def build_dot(
         "$source_path": str(source_path),
         "$wiki_dir": str(wiki_dir),
         "$schema_path": str(SCHEMA_PATH),
+        # assess uses the PER-SOURCE convergence rubric, NOT the whole-corpus
+        # eval rubric (which would vote `refine` forever on a single article).
+        "$convergence_rubric": str(CONVERGENCE_RUBRIC_PATH),
+        # $rubric_path retained for any eval-grading reuse; no longer referenced
+        # by the inner pipeline's assess node (kept reserved for the eval grader).
         "$rubric_path": str(RUBRIC_PATH),
         "$validate_cmd": validate_cmd,
         "$max_cycles": str(max_cycles),
