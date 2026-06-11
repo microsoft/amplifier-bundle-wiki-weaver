@@ -303,17 +303,22 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         )
 
     # Probe the CI server (GET, short timeout). DOWN is OK -- the hook fails soft
-    # and still writes local events.jsonl.
-    probe_url = server_url or "http://localhost:8100"
-    try:
-        import urllib.request
+    # and still writes local events.jsonl. No hardcoded default: if the user has
+    # not configured a server in settings, there is nothing to probe.
+    if not server_url:
+        _warn("no context-intelligence server_url in settings; skipping probe")
+    else:
+        try:
+            import urllib.request
 
-        with urllib.request.urlopen(probe_url, timeout=3) as resp:  # noqa: S310
-            _ok(f"context-intelligence server UP at {probe_url} (HTTP {resp.status})")
-    except Exception as e:  # noqa: BLE001
-        _warn(
-            f"context-intelligence server DOWN/unreachable at {probe_url} ({type(e).__name__}); OK -- hook fails soft, local events.jsonl still written"
-        )
+            with urllib.request.urlopen(server_url, timeout=3) as resp:  # noqa: S310
+                _ok(
+                    f"context-intelligence server UP at {server_url} (HTTP {resp.status})"
+                )
+        except Exception as e:  # noqa: BLE001
+            _warn(
+                f"context-intelligence server DOWN/unreachable at {server_url} ({type(e).__name__}); OK -- hook fails soft, local events.jsonl still written"
+            )
 
     if VALIDATE_PY.is_file():
         _ok(f"structural validator found: {VALIDATE_PY}")
