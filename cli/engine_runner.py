@@ -135,9 +135,18 @@ def load_ci_config() -> dict[str, Any]:
 # --------------------------------------------------------------------------
 
 
-def build_dot(source_path: Path, wiki_dir: Path, max_cycles: int) -> str:
+def build_dot(
+    source_path: Path,
+    wiki_dir: Path,
+    max_cycles: int,
+    source_id: int | str = "",
+) -> str:
     """Read the inner DOT, substitute its required context variables with
     concrete ABSOLUTE paths, then inject ``llm_provider`` on each LLM node.
+
+    ``source_id`` is the stable id the CLI assigned to this source BEFORE
+    ingest (Fix 3). It is injected as ``$source_id`` so the ingest node uses
+    the authoritative id instead of guessing one per run.
     """
     import sys
 
@@ -151,6 +160,7 @@ def build_dot(source_path: Path, wiki_dir: Path, max_cycles: int) -> str:
         "$rubric_path": str(RUBRIC_PATH),
         "$validate_cmd": validate_cmd,
         "$max_cycles": str(max_cycles),
+        "$source_id": str(source_id),
     }
     for var, value in substitutions.items():
         dot = dot.replace(var, value)
@@ -228,13 +238,62 @@ async def _resolve_agent_bundle(agent_name: str, config: dict[str, Any]) -> Any:
     )
 
 
-def make_spawn_fn(prepared: Any):
+# --------------------------------------------------------------------------
+# Fix 1 -- per-node filesystem isolation
+# --------------------------------------------------------------------------
+#
+# Process state (the .processed.jsonl ledger and the _archive/ directory) is the
+# deterministic CLI's EXCLUSIVE responsibility. A spawned LLM node must be
+# PHYSICALLY UNABLE to write it. The tool-filesystem module honours a
+# ``denied_write_paths`` config (DENY wins over ALLOW in is_path_allowed), so we
+# inject the ledger + archive paths into every spawned child agent's filesystem
+# tool config. This blocks the write_file / edit_file tools at the source.
+#
+# HONEST LIMITATION: tool-bash has no path-level sandbox (only command
+# allow/deny lists), so a determined agent could still shell its way around the
+# filesystem deny-list. That escape hatch is covered by the deterministic GUARD
+# in cli/wiki_weaver.py (Fix 1b), which fails loud on any agent-written ledger
+# line / archive move the CLI did not perform. Prevention here; safety net there.
+
+
+def _denied_process_paths(wiki_dir: Path) -> list[str]:
+    """The two process-state paths a spawned node must never write."""
+    wiki_dir = Path(wiki_dir).resolve()
+    return [str(wiki_dir / ".processed.jsonl"), str(wiki_dir / "_archive")]
+
+
+def _constrain_agent_fs(child_bundle: Any, wiki_dir: Path) -> None:
+    """Inject ``denied_write_paths`` for the ledger + archive into the child
+    bundle's tool-filesystem config, in place. Idempotent.
+    """
+    denied = _denied_process_paths(wiki_dir)
+    tools = getattr(child_bundle, "tools", None)
+    if not isinstance(tools, list):
+        return
+    for tool in tools:
+        if not isinstance(tool, dict):
+            continue
+        if tool.get("module") != "tool-filesystem":
+            continue
+        cfg = tool.get("config")
+        if not isinstance(cfg, dict):
+            cfg = {}
+            tool["config"] = cfg
+        existing = cfg.get("denied_write_paths") or []
+        merged = list(dict.fromkeys([*existing, *denied]))
+        cfg["denied_write_paths"] = merged
+
+
+def make_spawn_fn(prepared: Any, wiki_dir: Path | None = None):
     """Build the ``session.spawn`` capability for a prepared bundle.
 
     Each pipeline node spawns a full child sub-session built from one of the
     bundle's per-provider agents (resolved to its own ``loop-agent``
     orchestrator + tools). ``prepared.spawn`` composes parent -> child by
     default, so the context-intelligence hook is inherited by every child.
+
+    When ``wiki_dir`` is provided, every spawned child agent's filesystem tool
+    is constrained so it cannot write the ledger or _archive/ (Fix 1).
     """
     # Cache resolved agent bundles across spawns within one process.
     _agent_cache: dict[str, Any] = {}
@@ -262,6 +321,12 @@ def make_spawn_fn(prepared: Any):
         if agent_name not in _agent_cache:
             _agent_cache[agent_name] = await _resolve_agent_bundle(agent_name, config)
         child_bundle = _agent_cache[agent_name]
+
+        # Fix 1: physically deny the spawned node write access to the ledger and
+        # _archive/. DENY beats ALLOW in the filesystem tool, so write_file /
+        # edit_file targeting those paths are rejected at the tool boundary.
+        if wiki_dir is not None:
+            _constrain_agent_fs(child_bundle, wiki_dir)
 
         return await prepared.spawn(
             child_bundle=child_bundle,
@@ -357,16 +422,23 @@ async def _run_pipeline(
     logs_dir: Path,
     cwd: Path,
     execute_prompt: str = "Run the wiki-weaver inner pipeline",
+    wiki_dir: Path | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """Core proper-path runner shared by the inner pipeline and the thin slice.
 
     Returns ``(raw_text, parsed_json_or_fallback)``.
+
+    ``wiki_dir`` (when set) is forwarded to the spawn capability so each
+    per-node child agent's filesystem tool is denied write access to the
+    ledger and _archive/ (Fix 1).
     """
     import json
 
     prepared = await _build_prepared(dot_source, logs_dir)
     session = await prepared.create_session(session_cwd=cwd)
-    session.coordinator.register_capability("session.spawn", make_spawn_fn(prepared))
+    session.coordinator.register_capability(
+        "session.spawn", make_spawn_fn(prepared, wiki_dir=wiki_dir)
+    )
 
     async with session:
         raw = await session.execute(execute_prompt)
@@ -391,8 +463,13 @@ def run_inner(
     wiki_dir: str | Path,
     *,
     max_cycles: int = 3,
+    source_id: int | str = "",
 ) -> InnerResult:
-    """Run the inner convergence pipeline for ONE source through the engine."""
+    """Run the inner convergence pipeline for ONE source through the engine.
+
+    ``source_id`` is the stable id the CLI assigned to this source (Fix 3); it
+    is threaded into the ingest node as ``$source_id``.
+    """
     source_path = Path(source_path).resolve()
     wiki_dir = Path(wiki_dir).resolve()
     if not source_path.is_file():
@@ -404,10 +481,12 @@ def run_inner(
     logs_dir = wiki_dir / ".runs" / timestamp
     logs_dir.mkdir(parents=True, exist_ok=True)
 
-    dot_source = build_dot(source_path, wiki_dir, max_cycles)
+    dot_source = build_dot(source_path, wiki_dir, max_cycles, source_id=source_id)
     (logs_dir / "inner.dot").write_text(dot_source, encoding="utf-8")
 
-    _text, data = asyncio.run(_run_pipeline(dot_source, logs_dir, wiki_dir))
+    _text, data = asyncio.run(
+        _run_pipeline(dot_source, logs_dir, wiki_dir, wiki_dir=wiki_dir)
+    )
     status = data.get("status", "unknown")
     return InnerResult(
         status=status,

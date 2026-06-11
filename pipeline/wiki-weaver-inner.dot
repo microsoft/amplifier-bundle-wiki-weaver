@@ -33,11 +33,15 @@ digraph wiki_weaver_inner {
     // never creates per-source duplicates.
     ingest [
         label="Ingest Source",
-        prompt="You are weaving one source into a persistent knowledge wiki.\n\nSource to integrate: $source_path\nWiki directory: $wiki_dir\nSchema (the page contract you MUST follow): $schema_path\n\nFirst read $schema_path. Then read the CURRENT state of $wiki_dir (every existing page) and check .ai/feedback/ for refinement guidance from prior iterations.\n\nThen integrate the source:\n- Update EXISTING pages when the source discusses a concept already present (one page per concept; never create a near-duplicate).\n- Create new concept/entity pages for genuinely new concepts, with valid frontmatter (title, type, sources, last_updated).\n- Add [[wikilinks]] between related pages; every link must resolve to a page (create a stub if needed).\n- When the source DISAGREES with an existing page (different claim, or a different number for the same fact), DO NOT average or overwrite -- add/extend an '## Open tensions' section citing both sides with sources.\n- Maintain index.md and overview.md.\n\nWrite all changes under $wiki_dir now.\n\nWhen you have finished writing, your FINAL message MUST be a short one-paragraph summary listing the pages you created or updated. Do not end with an empty message."
+        prompt="You are weaving one source into a persistent knowledge wiki.\n\nSource to integrate: $source_path\nWiki directory: $wiki_dir\nSchema (the page contract you MUST follow): $schema_path\n\nThis source has ALREADY been assigned a stable source id by the orchestrator: $source_id. Use EXACTLY this integer in every page's frontmatter `sources:` list for claims drawn from this source. Do NOT invent, guess, or renumber source ids.\n\nHARD PROHIBITION (process state is owned by the deterministic CLI, never by you): You MUST NOT create, write, append to, move, or delete `.processed.jsonl` (the ledger) or anything under `_archive/`. Archiving the source and appending the ledger line are the CLI's EXCLUSIVE job and happen ONLY after this pipeline reports real convergence. Do not fabricate run metadata (logs_dir, timestamps, converged flags). If you write or move those paths the run is treated as tampered and FAILS. Your job is ONLY to write/update wiki pages under $wiki_dir.\n\nFirst read $schema_path. Then read the CURRENT state of $wiki_dir (every existing page) and check .ai/feedback/ for refinement guidance from prior iterations.\n\nThen integrate the source:\n- Update EXISTING pages when the source discusses a concept already present (one page per concept; never create a near-duplicate).\n- Create new concept/entity pages for genuinely new concepts, with valid frontmatter (title, type, sources, last_updated).\n- Add [[wikilinks]] between related pages; every link must resolve to a page (create a stub if needed).\n- When the source DISAGREES with an existing page (different claim, or a different number for the same fact), DO NOT average or overwrite -- add/extend an '## Open tensions' section citing both sides with sources.\n- Maintain index.md and overview.md.\n\nWrite all changes under $wiki_dir now.\n\nWhen you have finished writing, your FINAL message MUST be a short one-paragraph summary listing the pages you created or updated. Do not end with an empty message."
     ]
 
     // VALIDATE (code, deterministic): the Tier-1 structural graders.
-    // Non-zero exit forces the loop to treat the wiki as not-yet-valid.
+    // Non-zero exit (broken links / missing frontmatter / orphans) forces the
+    // loop back into the refine cycle via the validate -[fail]-> feedback edge
+    // below, instead of dead-ending at no_matching_edge. A FAILED tool node only
+    // traverses edges that match condition="outcome=fail" (engine fail-fast
+    // rule), so both outcomes are routed EXPLICITLY.
     validate [
         shape=parallelogram,
         label="Validate Structure",
@@ -63,7 +67,17 @@ digraph wiki_weaver_inner {
 
     start -> ingest
     ingest -> validate
-    validate -> assess
+
+    // VALIDATE routes BOTH outcomes explicitly. A tool node that exits non-zero
+    // produces outcome=fail; the engine's fail-fast rule means it will ONLY
+    // traverse an edge whose condition matches outcome=fail. Without the second
+    // edge a structural failure dead-ends at no_matching_edge (the old defect:
+    // one dangling link halted every future ingest). On fail we drop into the
+    // refine loop at `feedback` so the broken-link/error output is turned into
+    // guidance and repaired on the next ingest cycle.
+    validate -> assess   [label="pass", condition="outcome=success"]
+    validate -> feedback [label="fail", condition="outcome=fail"]
+
     assess -> check
 
     check -> done     [label="converged", condition="context.preferred_label=converged"]

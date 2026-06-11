@@ -19,6 +19,7 @@ Subcommands:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import subprocess
@@ -140,6 +141,164 @@ def _append_ledger(wiki: Path, entry: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Fix 3 -- persistent source registry (stable ids + content-hash dedupe)
+# ---------------------------------------------------------------------------
+#
+# Source ids used to be guessed per-run by the ingest LLM ([1]/[2]/[3]), which
+# collided across runs and produced duplicate summary pages on re-ingest. The
+# registry at <wiki>/.sources.json is the single source of truth: the CLILEDGER
+# assigns/looks up a stable id by CONTENT HASH *before* ingest and threads it
+# into the inner pipeline as $source_id. An already-ingested source (same hash)
+# is deduped and skipped.
+
+REGISTRY_NAME = ".sources.json"
+
+
+def _source_hash(src: Path) -> str:
+    """Stable content hash (sha256) of a source file."""
+    h = hashlib.sha256()
+    h.update(src.read_bytes())
+    return h.hexdigest()
+
+
+def _load_registry(wiki: Path) -> dict:
+    reg_path = wiki / REGISTRY_NAME
+    if not reg_path.exists():
+        return {"version": 1, "next_id": 1, "sources": []}
+    try:
+        data = json.loads(reg_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {"version": 1, "next_id": 1, "sources": []}
+    if not isinstance(data, dict):
+        return {"version": 1, "next_id": 1, "sources": []}
+    data.setdefault("version", 1)
+    data.setdefault("next_id", 1)
+    data.setdefault("sources", [])
+    return data
+
+
+def _save_registry(wiki: Path, registry: dict) -> None:
+    """Atomic write of the registry (tmp + replace)."""
+    reg_path = wiki / REGISTRY_NAME
+    tmp = reg_path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(registry, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(reg_path)
+
+
+def _registry_entry_for_hash(registry: dict, file_hash: str) -> dict | None:
+    for entry in registry.get("sources", []):
+        if entry.get("hash") == file_hash:
+            return entry
+    return None
+
+
+def _assign_source_id(wiki: Path, src: Path) -> tuple[dict, bool]:
+    """Look up or assign a stable id for ``src`` by content hash.
+
+    Returns ``(entry, is_new)``. ``entry`` always has id/filename/hash/ingested.
+    On a new source the registry is persisted immediately so the id is stable
+    even if the ingest run later fails or is retried.
+    """
+    file_hash = _source_hash(src)
+    registry = _load_registry(wiki)
+    existing = _registry_entry_for_hash(registry, file_hash)
+    if existing is not None:
+        return existing, False
+
+    entry = {
+        "id": int(registry["next_id"]),
+        "filename": src.name,
+        "hash": file_hash,
+        "first_seen": datetime.now().isoformat(timespec="seconds"),
+        "ingested": False,
+    }
+    registry["sources"].append(entry)
+    registry["next_id"] = int(registry["next_id"]) + 1
+    _save_registry(wiki, registry)
+    return entry, True
+
+
+def _mark_source_ingested(wiki: Path, file_hash: str) -> None:
+    registry = _load_registry(wiki)
+    entry = _registry_entry_for_hash(registry, file_hash)
+    if entry is not None and not entry.get("ingested"):
+        entry["ingested"] = True
+        entry["ingested_at"] = datetime.now().isoformat(timespec="seconds")
+        _save_registry(wiki, registry)
+
+
+# ---------------------------------------------------------------------------
+# Fix 1b -- deterministic tamper guard (the safety net under fs sandboxing)
+# ---------------------------------------------------------------------------
+#
+# Process state (the ledger + _archive/) is the CLI's EXCLUSIVE job and is
+# written ONLY here, AFTER a real convergence. The spawned ingest node is
+# additionally sandboxed at the filesystem-tool layer (engine_runner Fix 1),
+# but tool-bash has no path sandbox, so we ALSO verify deterministically: snap
+# the ledger + archive before the inner run; if EITHER changed during the run,
+# the agent fabricated process state. We never trust it -- we restore the
+# pre-run state (drop fabricated ledger lines, return falsely-archived files to
+# the inbox) and FAIL LOUD.
+
+
+def _snapshot_process_state(wiki: Path) -> tuple[int, set[str]]:
+    ledger = wiki / LEDGER_NAME
+    ledger_lines = (
+        len(ledger.read_text(encoding="utf-8").splitlines()) if ledger.exists() else 0
+    )
+    archive = wiki / ARCHIVE
+    archive_files = {p.name for p in archive.iterdir()} if archive.is_dir() else set()
+    return ledger_lines, archive_files
+
+
+def _detect_and_undo_tamper(wiki: Path, before: tuple[int, set[str]]) -> list[str]:
+    """Compare process state to the pre-run snapshot; undo + report tamper.
+
+    Returns a list of human-readable violation strings (empty == clean).
+    """
+    before_lines, before_archive = before
+    violations: list[str] = []
+
+    # (1) Ledger: any new line during the inner run is agent-fabricated, since
+    # the CLI appends only after this guard runs. Truncate back to before_lines.
+    ledger = wiki / LEDGER_NAME
+    if ledger.exists():
+        lines = ledger.read_text(encoding="utf-8").splitlines()
+        if len(lines) > before_lines:
+            fabricated = lines[before_lines:]
+            violations.append(
+                f"agent wrote {len(fabricated)} fabricated ledger line(s): "
+                + "; ".join(s[:160] for s in fabricated)
+            )
+            kept = lines[:before_lines]
+            ledger.write_text(
+                ("\n".join(kept) + "\n") if kept else "", encoding="utf-8"
+            )
+
+    # (2) Archive: any file that appeared during the inner run is an
+    # agent-performed move. Return it to the inbox so it is NOT falsely treated
+    # as processed, and so the source can be re-ingested honestly.
+    archive = wiki / ARCHIVE
+    inbox = wiki / INBOX
+    if archive.is_dir():
+        now_archive = {p.name for p in archive.iterdir()}
+        new_files = sorted(now_archive - before_archive)
+        if new_files:
+            violations.append(
+                "agent moved source(s) into _archive/ (CLI-exclusive): "
+                + ", ".join(new_files)
+            )
+            inbox.mkdir(exist_ok=True)
+            for name in new_files:
+                try:
+                    (archive / name).replace(inbox / name)
+                except OSError:
+                    pass
+
+    return violations
+
+
+# ---------------------------------------------------------------------------
 # ingest (headline command) -- the OUTER corpus sweep
 # ---------------------------------------------------------------------------
 
@@ -173,17 +332,55 @@ def cmd_ingest(args: argparse.Namespace) -> int:
 
     for src in sources:
         name = src.name
-        if name in processed:
-            _warn(f"skip (already in ledger): {name}")
+
+        # Fix 3: assign/look up a STABLE id by content hash BEFORE ingest and
+        # dedupe an already-ingested source (same bytes) regardless of filename.
+        entry, is_new = _assign_source_id(wiki, src)
+        source_id = entry["id"]
+        file_hash = entry["hash"]
+        already_done = entry.get("ingested") or name in processed
+        if already_done:
+            _warn(
+                f"skip (already ingested as source id [{source_id}], "
+                f"hash {file_hash[:12]}): {name}"
+            )
             summary.append((name, "skipped"))
             continue
+        if is_new:
+            print(f"  assigned stable source id [{source_id}] for {name}")
+        else:
+            print(f"  reusing stable source id [{source_id}] for {name}")
 
-        print(f"\n=== ingest: {name} ===")
+        print(f"\n=== ingest: {name} (source id [{source_id}]) ===")
+
+        # Fix 1b: snapshot process state so we can detect any agent-written
+        # ledger line / archive move performed DURING the inner run (the CLI
+        # writes process state only AFTER this, on real convergence).
+        before_state = _snapshot_process_state(wiki)
+
         try:
-            result = run_inner(src, wiki, max_cycles=args.max_cycles)
+            result = run_inner(
+                src, wiki, max_cycles=args.max_cycles, source_id=source_id
+            )
         except Exception as e:  # noqa: BLE001 -- surface the real failure, loudly
             _fail(f"engine error on {name}: {type(e).__name__}: {e}")
             summary.append((name, "error"))
+            if not args.keep_going:
+                _print_summary(summary)
+                return 1
+            continue
+
+        # Fix 1b: never trust agent-written process state. Undo + fail loud.
+        violations = _detect_and_undo_tamper(wiki, before_state)
+        if violations:
+            _fail(
+                f"{name}: TAMPER DETECTED -- the ingest agent wrote process "
+                f"state it does not own. Convergence is NOT trusted; "
+                f"fabricated records were reverted."
+            )
+            for v in violations:
+                _fail(f"    - {v}")
+            summary.append((name, "tampered"))
             if not args.keep_going:
                 _print_summary(summary)
                 return 1
@@ -197,6 +394,8 @@ def cmd_ingest(args: argparse.Namespace) -> int:
                 wiki,
                 {
                     "source": name,
+                    "source_id": source_id,
+                    "hash": file_hash,
                     "status": result.status,
                     "converged": result.converged,
                     "archived_to": str(dest),
@@ -204,6 +403,7 @@ def cmd_ingest(args: argparse.Namespace) -> int:
                     "timestamp": datetime.now().isoformat(timespec="seconds"),
                 },
             )
+            _mark_source_ingested(wiki, file_hash)
             _ok(f"{name}: converged (logs: {result.logs_dir})")
             summary.append((name, "converged"))
         else:
@@ -282,6 +482,22 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         _fail(f"amplifier_foundation not importable: {e}")
         _warn("  run wiki-weaver under a python env that has amplifier-foundation")
         _warn("  (e.g. the interpreter behind ~/.local/bin/amplifier)")
+        ok = False
+
+    # unified_llm must be importable: the engine's DirectProviderBackend fallback
+    # imports it, and a stale unified-llm-client (>=0.2 ships as `llm/`, not
+    # `unified_llm/`) makes that fallback crash AFTER a multi-minute ingest with
+    # ModuleNotFoundError. Catch the regression here in one second instead.
+    try:
+        import unified_llm  # noqa: F401
+
+        _ok("unified_llm importable (engine fallback path safe)")
+    except Exception as e:  # noqa: BLE001
+        _fail(f"unified_llm NOT importable: {e}")
+        _warn("  install the correct client: uv pip install --python <amplifier py> \\")
+        _warn(
+            "  --force-reinstall <attractor-cache>/modules/unified-llm-client (v0.1.x, ships unified_llm/)"
+        )
         ok = False
 
     pipeline_bundle = Path(ATTRACTOR_PIPELINE_LOCAL)
