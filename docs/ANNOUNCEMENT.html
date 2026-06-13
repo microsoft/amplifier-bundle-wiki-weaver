@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Wiki-Weaver — Announcement</title>
+<style>
+:root {
+  --accent: #5E5CE6;
+  --accent-soft: #8E8CF0;
+
+  --font-headline: clamp(34px, 7.5vw, 70px);
+  --font-medium-headline: clamp(24px, 5vw, 46px);
+  --font-subhead: clamp(16px, 3vw, 30px);
+  --fs-body: clamp(14px, 2vw, 17px);
+  --fs-small: clamp(12px, 1.7vw, 14px);
+
+  --padding-slide: clamp(20px, 5vw, 80px);
+  --gap-grid: clamp(14px, 2.5vw, 32px);
+
+  --surface-1: rgba(255,255,255,0.06);
+  --surface-2: rgba(255,255,255,0.10);
+  --border-subtle: rgba(255,255,255,0.12);
+  --border-visible: rgba(255,255,255,0.20);
+
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255,255,255,0.72);
+  --text-tertiary: rgba(255,255,255,0.52);
+
+  --code-green: #6DD58C;
+  --code-comment: rgba(255,255,255,0.4);
+  --warn: #FFD60A;
+  --ok: #30D158;
+  --neg: #FF6B6B;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+  background: #000;
+  color: var(--text-primary);
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.slide {
+  display: none;
+  width: 100vw;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: clamp(56px, 9vw, 110px) var(--padding-slide) clamp(76px, 11vw, 100px);
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.slide.active { display: flex; }
+.slide.center { text-align: center; align-items: center; justify-content: center; }
+
+.section-label {
+  font-size: var(--fs-small);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--accent-soft);
+  margin-bottom: clamp(12px, 2vw, 20px);
+}
+
+.headline {
+  font-size: var(--font-headline);
+  font-weight: 700;
+  letter-spacing: -1.5px;
+  line-height: 1.05;
+}
+.medium-headline {
+  font-size: var(--font-medium-headline);
+  font-weight: 700;
+  letter-spacing: -1px;
+  line-height: 1.1;
+  margin-bottom: clamp(18px, 3vw, 36px);
+}
+.subhead {
+  font-size: var(--font-subhead);
+  font-weight: 400;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin-top: clamp(14px, 2.5vw, 24px);
+  max-width: 24ch;
+}
+.lead {
+  font-size: clamp(16px, 2.4vw, 22px);
+  color: var(--text-secondary);
+  line-height: 1.5;
+  max-width: 62ch;
+  margin-bottom: clamp(20px, 3vw, 36px);
+}
+.small-text { font-size: var(--fs-small); color: var(--text-tertiary); }
+
+.split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+  gap: var(--gap-grid);
+  width: 100%;
+}
+
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: clamp(12px, 2vw, 16px);
+  padding: clamp(16px, 3.5vw, 26px);
+}
+.card h4 { color: var(--text-primary); font-size: clamp(16px, 2.3vw, 20px); margin-bottom: 8px; letter-spacing: -0.3px; }
+.card p { color: var(--text-secondary); font-size: var(--fs-body); line-height: 1.5; }
+.card .kicker { color: var(--accent-soft); font-weight: 600; font-size: var(--fs-small); text-transform: uppercase; letter-spacing: 1px; }
+.card .icon-card { font-size: clamp(26px, 4vw, 38px); display: block; margin-bottom: 10px; }
+
+.code-block {
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: clamp(14px, 3vw, 22px) clamp(16px, 4vw, 28px);
+  font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+  font-size: clamp(12.5px, 1.9vw, 15px);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-x: auto;
+  width: 100%;
+  max-width: 820px;
+}
+.code-comment { color: var(--code-comment); }
+.code-key { color: var(--accent-soft); }
+.code-str { color: #E8C46B; }
+.code-link { color: #6FC2E8; }
+.code-tag { color: var(--warn); }
+
+/* Flow diagram */
+.flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: clamp(8px, 1.5vw, 14px);
+  width: 100%;
+  margin-bottom: clamp(14px, 2vw, 22px);
+}
+.node {
+  flex: 1 1 110px;
+  min-width: 100px;
+  border-radius: 12px;
+  padding: clamp(12px, 2vw, 18px) clamp(10px, 1.8vw, 16px);
+  text-align: center;
+  border: 1px solid var(--border-visible);
+}
+.node .nlabel { font-weight: 700; font-size: clamp(15px, 2.2vw, 19px); letter-spacing: -0.3px; }
+.node .nrole { font-size: var(--fs-small); margin-top: 4px; }
+.node.code { background: rgba(94,92,230,0.16); border-color: rgba(94,92,230,0.55); }
+.node.code .nrole { color: var(--accent-soft); }
+.node.agent { background: rgba(255,255,255,0.08); }
+.node.agent .nrole { color: var(--text-tertiary); }
+.arrow { color: var(--text-tertiary); font-size: clamp(18px, 3vw, 26px); flex: 0 0 auto; }
+.loopback {
+  font-size: var(--fs-small);
+  color: var(--accent-soft);
+  border: 1px dashed rgba(94,92,230,0.5);
+  border-radius: 999px;
+  padding: 6px 16px;
+  align-self: center;
+}
+.legend-row { display: flex; gap: clamp(16px, 3vw, 28px); flex-wrap: wrap; margin-top: 4px; }
+.legend-item { display: flex; align-items: center; gap: 8px; font-size: var(--fs-small); color: var(--text-secondary); }
+.swatch { width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--border-visible); }
+.swatch.code { background: rgba(94,92,230,0.5); }
+.swatch.agent { background: rgba(255,255,255,0.3); }
+
+/* Data table */
+.data-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+.data-table th {
+  color: var(--accent-soft);
+  font-size: var(--fs-small);
+  font-weight: 600;
+  text-align: left;
+  padding: clamp(8px, 1.5vw, 12px);
+  border-bottom: 1px solid var(--border-visible);
+}
+.data-table td {
+  color: var(--text-secondary);
+  font-size: var(--fs-body);
+  padding: clamp(9px, 1.6vw, 13px);
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  vertical-align: top;
+}
+.data-table td strong { color: var(--text-primary); }
+.mono { font-family: 'SF Mono','Fira Code',monospace; color: var(--code-green); font-size: 0.92em; }
+
+/* Versus table */
+.vs-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+.vs-table th {
+  font-size: var(--fs-small);
+  font-weight: 700;
+  text-align: left;
+  padding: clamp(10px,1.6vw,14px) clamp(8px,1.5vw,14px);
+  border-bottom: 1px solid var(--border-visible);
+  letter-spacing: 0.3px;
+}
+.vs-table th.axis { color: var(--text-tertiary); text-transform: uppercase; font-size: 11px; letter-spacing: 1px; }
+.vs-table th.col-cli { color: var(--text-secondary); }
+.vs-table th.col-ww { color: var(--accent-soft); }
+.vs-table td {
+  font-size: var(--fs-body);
+  padding: clamp(9px,1.5vw,13px) clamp(8px,1.5vw,14px);
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  vertical-align: top;
+  line-height: 1.45;
+}
+.vs-table td.axis { color: var(--text-primary); font-weight: 600; font-size: var(--fs-small); }
+.vs-table td.cli { color: var(--text-tertiary); }
+.vs-table td.ww { color: var(--text-secondary); }
+.vs-table td.ww strong { color: var(--text-primary); }
+.vs-table .col-ww-cell { background: rgba(94,92,230,0.07); }
+.x-mark { color: var(--neg); font-weight: 700; }
+.check-mark { color: var(--ok); font-weight: 700; }
+
+.filerow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.file-chip { font-family:'SF Mono','Fira Code',monospace; font-size: var(--fs-small); color: var(--text-secondary); background: var(--surface-1); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 6px 11px; }
+.file-chip.dir { color: var(--accent-soft); }
+.file-chip.dot { color: var(--text-tertiary); }
+.annot { color: var(--text-tertiary); font-size: var(--fs-small); }
+
+.maxw { max-width: 1080px; width: 100%; margin: 0 auto; }
+
+/* Nav */
+.nav { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; z-index: 90; }
+.nav-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.25); cursor: pointer; transition: background 0.2s; }
+.nav-dot.active { background: var(--accent); }
+.slide-counter { position: fixed; bottom: 12px; right: 16px; font-size: var(--fs-small); color: var(--text-tertiary); z-index: 90; }
+.more-stories { position: fixed; bottom: 12px; left: 16px; font-size: clamp(11px,1.5vw,12px); color: rgba(255,255,255,0.3); text-decoration: none; z-index: 90; }
+.more-stories:hover { color: rgba(255,255,255,0.5); }
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .slide { padding: 16px var(--padding-slide) 56px; }
+  .slide.center { justify-content: flex-start; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .slide, .slide * { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- 1. TITLE -->
+<div class="slide active center">
+  <div class="section-label">Knowledge Infrastructure</div>
+  <h1 class="headline">Wiki-Weaver</h1>
+  <p class="subhead">Compiles a pile of raw sources into a connected, error-free, provenance-tracked memory — instead of stateless RAG or one-shot summaries that rot.</p>
+</div>
+
+<!-- 2. WHAT IT IS -->
+<div class="slide">
+  <div class="maxw">
+    <div class="section-label">What It Is</div>
+    <h2 class="medium-headline">A declarative convergence loop.</h2>
+    <p class="lead">Andrej Karpathy's "LLM Wiki / second brain," made real: <strong style="color:var(--text-primary)">compile</strong> sources into one-concept-per-page notes that cross-link and merge. Authored as a <strong style="color:var(--text-primary)">graph</strong> — nodes and edges in DOT, run by the attractor engine — not as imperative script.</p>
+    <div class="split">
+      <div class="card">
+        <span class="kicker">The shape</span>
+        <h4 style="margin-top:8px;">Steps, not statements</h4>
+        <p>Five nodes wired by edges. Each is an <strong style="color:var(--text-primary)">isolated session</strong> with a thin, scoped context. It loops until the wiki is structurally valid <em>and</em> quality-accepted.</p>
+      </div>
+      <div class="card">
+        <span class="kicker">The split</span>
+        <h4 style="margin-top:8px;">Code controls, agents judge</h4>
+        <p>Code owns control, validation, archiving, and dedup. Agents do only the irreducible judgment — synthesis, quality, remediation.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 3. THE FLOW -->
+<div class="slide">
+  <div class="maxw">
+    <div class="section-label">What It Looks Like · The Flow</div>
+    <h2 class="medium-headline">Code-first. Agents where they earn it.</h2>
+    <div class="flow">
+      <div class="node agent"><div class="nlabel">ingest</div><div class="nrole">agent · synthesis</div></div>
+      <span class="arrow">→</span>
+      <div class="node code"><div class="nlabel">validate</div><div class="nrole">code · structure</div></div>
+      <span class="arrow">→</span>
+      <div class="node agent"><div class="nlabel">assess</div><div class="nrole">agent · quality</div></div>
+      <span class="arrow">→</span>
+      <div class="node code"><div class="nlabel">check</div><div class="nrole">code · route</div></div>
+      <span class="arrow">→</span>
+      <div class="node code" style="background:rgba(48,209,88,0.12);border-color:rgba(48,209,88,0.4);"><div class="nlabel">done</div><div class="nrole" style="color:var(--ok);">converged</div></div>
+    </div>
+    <div class="flow" style="justify-content:center; margin-top:-4px;">
+      <span class="loopback">↺ on any failure → <strong>feedback</strong> (agent · fed the validator's exact errors) → re-ingest</span>
+    </div>
+    <p class="lead" style="margin-top:14px; font-size:clamp(15px,2.2vw,19px);">Ingest reads a <strong style="color:var(--text-primary)">slice</strong> — touched + broken/orphan pages — never the whole corpus, so it <strong style="color:var(--text-primary)">scales</strong> as the wiki grows.</p>
+    <div class="legend-row">
+      <div class="legend-item"><span class="swatch code"></span> Deterministic code — control &amp; verification</div>
+      <div class="legend-item"><span class="swatch agent"></span> LLM agent — synthesis &amp; judgment</div>
+    </div>
+  </div>
+</div>
+
+<!-- 4. WHY A PIPELINE BEATS A CLI -->
+<div class="slide">
+  <div class="maxw">
+    <div class="section-label">Why A Pipeline</div>
+    <h2 class="medium-headline">Specialists with quality gates — not one big prompt in a loop.</h2>
+    <p class="lead">The honest baseline is the real <span class="mono">medium-tools</span> CLI — a useful <em>acquisition</em> tool (<span class="mono">login → sync → download → summarize</span>) that fills the <span class="mono">_inbox/</span> with one-shot per-article summaries. Acquiring is a different job from <em>compiling a connected wiki</em>. That gap is where the loop earns its place.</p>
+    <table class="vs-table">
+      <thead>
+        <tr><th class="axis">Axis</th><th class="col-cli">One-shot CLI</th><th class="col-ww">Wiki-Weaver</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="axis">Quality</td><td class="cli"><span class="x-mark">✗</span> Ships one pass</td><td class="ww col-ww-cell"><span class="check-mark">✓</span> <strong>Refines until valid + converged</strong></td></tr>
+        <tr><td class="axis">Failure</td><td class="cli"><span class="x-mark">✗</span> Human must notice &amp; re-run</td><td class="ww col-ww-cell"><span class="check-mark">✓</span> <strong>Self-heals</strong> — gate's errors plumbed into remediation</td></tr>
+        <tr><td class="axis">Context</td><td class="cli"><span class="x-mark">✗</span> Monolithic; bloats with corpus</td><td class="ww col-ww-cell"><span class="check-mark">✓</span> <strong>Per-node isolation</strong> — reads a slice</td></tr>
+        <tr><td class="axis">Trust</td><td class="cli"><span class="x-mark">✗</span> Empty/garbage summary can be stored</td><td class="ww col-ww-cell"><span class="check-mark">✓</span> <strong>Confabulation guard</strong> — code can't be told "done"</td></tr>
+        <tr><td class="axis">Scale</td><td class="cli"><span class="x-mark">✗</span> Summaries pile up, never merge</td><td class="ww col-ww-cell"><span class="check-mark">✓</span> <strong>Registry + dedup</strong> — concepts merge in place</td></tr>
+        <tr><td class="axis">Extend</td><td class="cli"><span class="x-mark">✗</span> Edit a 3,400-line orchestrator</td><td class="ww col-ww-cell"><span class="check-mark">✓</span> <strong>Edit the graph</strong> — add a node, reroute an edge</td></tr>
+      </tbody>
+    </table>
+    <p class="small-text" style="margin-top:12px;">Axes drawn from the real <span class="mono">medium-tools-architecture.dot</span> (incl. its documented summarize bugs). The two are complementary: the CLI acquires, the pipeline compiles.</p>
+  </div>
+</div>
+
+<!-- 5. THE ARTIFACT -->
+<div class="slide">
+  <div class="maxw">
+    <div class="section-label">What It Looks Like · The Artifact</div>
+    <h2 class="medium-headline">One concept per page. Linked, cited, honest.</h2>
+    <div class="code-block"><span class="code-comment">--- long-term-memory-for-llms.md ---</span>
+<span class="code-key">title:</span> Long-term Memory for LLMs
+<span class="code-key">sources:</span> <span class="code-link">[1, 2, 3]</span>          <span class="code-comment"># provenance accrues as sources merge</span>
+<span class="code-key">last_updated:</span> 2026-06-11
+
+Persistent recall moves agents beyond [[<span class="code-link">Short-term Memory</span>]],
+combining [[<span class="code-link">Vector-based Memory Systems</span>]] with
+[[<span class="code-link">Knowledge Graphs for Memory</span>]]...
+
+<span class="code-tag">## Open Tensions</span>
+- <span class="code-str">Some treat the LLM-Wiki pattern as "the RAG killer"; others as</span>
+  <span class="code-str">"just a better cache layer" (status: unresolved).</span>
+
+<span class="code-tag">&gt; TODO-VERIFY:</span> mitigation strategies for vector-DB data-quality issues</div>
+    <div class="filerow">
+      <span class="file-chip">index.md</span>
+      <span class="file-chip">overview.md</span>
+      <span class="file-chip dir">_inbox/</span>
+      <span class="file-chip dir">_archive/</span>
+      <span class="file-chip dot">.sources.json</span>
+      <span class="file-chip dot">.processed.jsonl</span>
+    </div>
+    <p class="annot" style="margin-top:12px;">Real excerpts from <span class="mono">runs/holdout</span> &amp; <span class="mono">runs/proof</span> — <span class="mono">[[wikilinks]]</span> cross-link, <span class="mono">## Open Tensions</span> surfaces disagreement with provenance, <span class="mono">TODO-VERIFY</span> flags ungrounded claims. Process state is written by code only.</p>
+  </div>
+</div>
+
+<!-- 6. PROOF -->
+<div class="slide">
+  <div class="maxw">
+    <div class="section-label">It's Real · Evals-Driven</div>
+    <h2 class="medium-headline">Verified, not asserted.</h2>
+    <table class="data-table">
+      <thead><tr><th>Property</th><th>Evidence</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Generalizes (not over-fit)</strong></td><td>Held-out cluster on a <em>different</em> topic — agent long-term memory: 3 articles converge, <span class="mono">0 orphans / 0 broken / 0 dup</span>, <span class="mono">sources:</span> accrue to <span class="mono">[1, 2, 3]</span>.</td></tr>
+        <tr><td><strong>Compounds</strong></td><td>Karpathy cluster: pages grow in place, <span class="mono">sources:</span> accrue <span class="mono">[1]→[1,2]</span>, <strong>0 duplicate</strong> pages.</td></tr>
+        <tr><td><strong>Surfaces contradictions</strong></td><td>A pro-RAG source in an anti-RAG wiki produced an <span class="mono">## Open Tensions</span> section citing <em>both</em> sides — not averaged.</td></tr>
+        <tr><td><strong>Self-heals</strong></td><td>Inject a broken <span class="mono">[[link]]</span> → validate→feedback→ingest repairs it and re-converges.</td></tr>
+        <tr><td><strong>Can't fake "done"</strong></td><td>Confabulation guard: ledger/archive written by code only on real convergence. Held through 2 hard kills.</td></tr>
+        <tr><td><strong>Reliable</strong></td><td>Final run: <strong>4/4 converged</strong>, validator PASS.</td></tr>
+      </tbody>
+    </table>
+    <p class="small-text" style="margin-top:14px;">Data as of 2026-06-11. Claims quoted from real files in <span class="mono">runs/{proof,holdout,contradiction,final}</span>; CLI baseline read from <span class="mono">medium-tools/</span>. Scope: numbers reflect the named proof runs — broader corpus-scale awaits the next pile.</p>
+  </div>
+</div>
+
+<!-- 7. HONEST RESIDUALS -->
+<div class="slide">
+  <div class="maxw">
+    <div class="section-label">Honest Gaps</div>
+    <h2 class="medium-headline">Two non-blocking residuals.</h2>
+    <div class="split">
+      <div class="card">
+        <span class="icon-card" style="color:var(--warn)">⚠️</span>
+        <h4>Prose verdicts — now non-fatal</h4>
+        <p>The <span class="mono">assess</span> node occasionally returns its verdict as prose, not JSON. <span class="mono">check</span> routes any non-<span class="mono">converged</span> verdict to one extra refine cycle — costs at most a cycle, <strong>never falsely converges</strong>.</p>
+      </div>
+      <div class="card">
+        <span class="icon-card" style="color:var(--warn)">🗓️</span>
+        <h4>Model migration due</h4>
+        <p>Currently runs on a model retiring 2026-06-15. Migration is queued — should also improve verdict-format compliance.</p>
+      </div>
+    </div>
+    <p class="small-text" style="margin-top:24px;">Neither blocks the result. Both tracked, not hidden. Full design: <span class="mono">docs/designs/PIPELINE_DESIGN.md</span> · runbook: <span class="mono">DEMO.md</span></p>
+  </div>
+</div>
+
+<div class="nav" id="nav"></div>
+<div class="slide-counter" id="counter"></div>
+<a href="index.html" class="more-stories">More Amplifier Stories</a>
+
+<script>
+const slides = document.querySelectorAll('.slide');
+let currentSlide = 0;
+
+function showSlide(n) {
+  slides[currentSlide].classList.remove('active');
+  currentSlide = (n + slides.length) % slides.length;
+  slides[currentSlide].classList.add('active');
+  slides[currentSlide].scrollTop = 0;
+  updateNav();
+}
+function updateNav() {
+  const nav = document.getElementById('nav');
+  const counter = document.getElementById('counter');
+  nav.innerHTML = '';
+  slides.forEach((_, i) => {
+    const dot = document.createElement('div');
+    dot.className = 'nav-dot' + (i === currentSlide ? ' active' : '');
+    dot.onclick = (e) => { e.stopPropagation(); showSlide(i); };
+    nav.appendChild(dot);
+  });
+  counter.textContent = `${currentSlide + 1} / ${slides.length}`;
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); showSlide(currentSlide + 1); }
+  if (e.key === 'ArrowLeft') showSlide(currentSlide - 1);
+});
+document.addEventListener('click', (e) => {
+  if (e.target.closest('.nav') || e.target.closest('a')) return;
+  if (e.clientX > window.innerWidth / 2) showSlide(currentSlide + 1);
+  else showSlide(currentSlide - 1);
+});
+let touchStartX = 0, touchEndX = 0;
+const SWIPE_THRESHOLD = 50;
+document.addEventListener('touchstart', (e) => { touchStartX = e.changedTouches[0].screenX; }, { passive: true });
+document.addEventListener('touchend', (e) => {
+  touchEndX = e.changedTouches[0].screenX;
+  const diff = touchStartX - touchEndX;
+  if (Math.abs(diff) > SWIPE_THRESHOLD) {
+    if (diff > 0) showSlide(currentSlide + 1);
+    else showSlide(currentSlide - 1);
+  }
+}, { passive: true });
+updateNav();
+</script>
+</body>
+</html>

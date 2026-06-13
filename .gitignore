@@ -4,3 +4,15 @@
 runs/
 wiki/        # generated wiki output from pipeline runs
 *.log
+
+# OS/environment files (must stay untracked)
+.DS_Store
+._*
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+*.egg-info/
+dist/
+build/

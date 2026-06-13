@@ -63,4 +63,4 @@ flagged with both values and their sources — never collapsed to one or average
 
 Only write claims supported by a cited source. If sources don't say it, it
 doesn't go in the wiki. A rhetorical/strawman framing in a source is not a claim
-the wiki should assert.
+the wiki should assert. Vendor/marketing claims — star counts, performance superlatives, self-reported adoption stats — must be framed as attributed claims ("X reports…", "according to [N]"), not stated as fact in the wiki's own voice.
