@@ -26,6 +26,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from datetime import date, datetime
 from pathlib import Path
 
@@ -39,6 +40,7 @@ RESET = "\033[0m"
 LEDGER_NAME = ".processed.jsonl"
 INBOX = "_inbox"
 ARCHIVE = "_archive"
+FAILED = "_failed"
 
 # Pipeline assets live alongside this package's repo.
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -472,6 +474,30 @@ def _detect_and_undo_tamper(wiki: Path, before: tuple[int, set[str]]) -> list[st
 
 
 # ---------------------------------------------------------------------------
+# ingest helpers
+# ---------------------------------------------------------------------------
+
+
+def _collision_safe_move(src: Path, dest_dir: Path) -> Path:
+    """Move *src* into *dest_dir*, adding an integer suffix if the name is taken.
+
+    Returns the final destination path.  Raises RuntimeError only on extreme
+    collision counts (>= 10,000), which should never occur in practice.
+    """
+    dest = dest_dir / src.name
+    if not dest.exists():
+        src.replace(dest)
+        return dest
+    stem, suffix = src.stem, src.suffix
+    for i in range(1, 10_000):
+        candidate = dest_dir / f"{stem}.{i}{suffix}"
+        if not candidate.exists():
+            src.replace(candidate)
+            return candidate
+    raise RuntimeError(f"too many name collisions in {dest_dir} for {src.name}")
+
+
+# ---------------------------------------------------------------------------
 # ingest (headline command) -- the OUTER corpus sweep
 # ---------------------------------------------------------------------------
 
@@ -488,11 +514,129 @@ def cmd_ingest(args: argparse.Namespace) -> int:
     archive.mkdir(exist_ok=True)
 
     if args.source:
-        sources = [Path(args.source).resolve()]
-    else:
-        sources = sorted(p for p in inbox.glob("*.md") if p.is_file())
+        # ------------------------------------------------------------------ #
+        # SINGLE-FILE PATH — behavior UNCHANGED from original.                #
+        # keep_going and exit-on-first-failure semantics are preserved here.  #
+        # ------------------------------------------------------------------ #
+        sources: list[Path] = [Path(args.source).resolve()]
 
-    if not sources:
+        # Import the engine runner lazily so `doctor`/`init`/`lint` never pay
+        # the cost of pulling in the attractor engine.
+        from cli.engine_runner import run_inner
+
+        processed = _processed_sources(wiki)
+        summary: list[tuple[str, str]] = []
+
+        for src in sources:
+            name = src.name
+
+            # Fix 3: assign/look up a STABLE id by content hash BEFORE ingest
+            # and dedupe an already-ingested source (same bytes) regardless of
+            # filename.
+            entry, is_new = _assign_source_id(wiki, src)
+            source_id = entry["id"]
+            file_hash = entry["hash"]
+            already_done = entry.get("ingested") or name in processed
+            if already_done:
+                _warn(
+                    f"skip (already ingested as source id [{source_id}], "
+                    f"hash {file_hash[:12]}): {name}"
+                )
+                summary.append((name, "skipped"))
+                continue
+            if is_new:
+                print(f"  assigned stable source id [{source_id}] for {name}")
+            else:
+                print(f"  reusing stable source id [{source_id}] for {name}")
+
+            print(f"\n=== ingest: {name} (source id [{source_id}]) ===")
+
+            # Fix 1b: snapshot process state so we can detect any agent-written
+            # ledger line / archive move performed DURING the inner run (the CLI
+            # writes process state only AFTER this, on real convergence).
+            before_state = _snapshot_process_state(wiki)
+
+            try:
+                result = run_inner(
+                    src, wiki, max_cycles=args.max_cycles, source_id=source_id
+                )
+            except Exception as e:  # noqa: BLE001 -- surface the real failure, loudly
+                _fail(f"engine error on {name}: {type(e).__name__}: {e}")
+                summary.append((name, "error"))
+                if not args.keep_going:
+                    _print_summary(summary)
+                    return 1
+                continue
+
+            # Fix 1b: never trust agent-written process state. Undo + fail loud.
+            violations = _detect_and_undo_tamper(wiki, before_state)
+            if violations:
+                _fail(
+                    f"{name}: TAMPER DETECTED -- the ingest agent wrote process "
+                    f"state it does not own. Convergence is NOT trusted; "
+                    f"fabricated records were reverted."
+                )
+                for v in violations:
+                    _fail(f"    - {v}")
+                summary.append((name, "tampered"))
+                if not args.keep_going:
+                    _print_summary(summary)
+                    return 1
+                continue
+
+            if result.converged:
+                dest = archive / name
+                if src.is_file() and src.parent == inbox:
+                    src.replace(dest)
+                _append_ledger(
+                    wiki,
+                    {
+                        "source": name,
+                        "source_id": source_id,
+                        "hash": file_hash,
+                        "status": result.status,
+                        "converged": result.converged,
+                        "archived_to": str(dest),
+                        "logs_dir": str(result.logs_dir),
+                        "timestamp": datetime.now().isoformat(timespec="seconds"),
+                    },
+                )
+                _mark_source_ingested(wiki, file_hash)
+                _ok(f"{name}: converged (logs: {result.logs_dir})")
+                summary.append((name, "converged"))
+            else:
+                _fail(
+                    f"{name}: did not converge "
+                    f"(status={result.status}, reason={result.failure_reason})"
+                )
+                summary.append((name, "not-converged"))
+                if not args.keep_going:
+                    _print_summary(summary)
+                    return 1
+
+        _print_summary(summary)
+        return 0
+
+    # ---------------------------------------------------------------------- #
+    # INBOX DRAIN PATH — re-globs _inbox on every pass so files added mid-run #
+    # are picked up automatically.                                            #
+    #                                                                         #
+    # Load-bearing invariant: every file picked from _inbox MUST leave        #
+    # _inbox this pass.  This keeps the inbox strictly shrinking and          #
+    # guarantees termination — no infinite spin on bad files.                 #
+    #                                                                         #
+    # Terminal dispositions:                                                  #
+    #   converged   → _archive/  (existing behaviour)                        #
+    #   duplicate   → _archive/  (collision-safe; was: left in inbox → spin) #
+    #   error/tamper/non-convergence → _failed/ (new; was: halted the run)   #
+    #                                                                         #
+    # --keep-going is accepted but is a NO-OP in drain mode: failures always  #
+    # route to _failed/ and draining always continues regardless.  The flag   #
+    # no longer controls early-exit here; exit code is set after the drain.   #
+    # ---------------------------------------------------------------------- #
+
+    # Warn + bail early if inbox is empty (preserves original UX; lazy import).
+    if not any(inbox.glob("*.md")):
         _warn(f"no sources to ingest (inbox empty: {inbox})")
         return 0
 
@@ -501,9 +645,34 @@ def cmd_ingest(args: argparse.Namespace) -> int:
     from cli.engine_runner import run_inner
 
     processed = _processed_sources(wiki)
-    summary: list[tuple[str, str]] = []
+    summary: list[tuple[str, str]] = []  # type: ignore[no-redef]
 
-    for src in sources:
+    failed_dir = wiki / FAILED
+    failed_dir.mkdir(exist_ok=True)
+
+    # Debounce: skip files written < 2 s ago (half-written by a concurrent
+    # producer).  If all pending files are too-fresh, sleep briefly and retry
+    # up to _FRESH_RETRIES_MAX times before declaring the drain complete.
+    _DEBOUNCE_SECS = 2.0
+    _FRESH_RETRIES_MAX = 5
+    _fresh_retries = 0
+
+    while True:
+        pending = sorted(p for p in inbox.glob("*.md") if p.is_file())
+        now = time.time()
+        ready = [p for p in pending if (now - p.stat().st_mtime) >= _DEBOUNCE_SECS]
+
+        if not ready:
+            if pending and _fresh_retries < _FRESH_RETRIES_MAX:
+                # Files exist but all too-fresh; wait and retry.
+                _fresh_retries += 1
+                time.sleep(0.5)
+                continue
+            # No files at all, or fresh-retry budget exhausted → drain complete.
+            break
+
+        _fresh_retries = 0  # reset whenever we find a ready file
+        src = ready[0]
         name = src.name
 
         # Fix 3: assign/look up a STABLE id by content hash BEFORE ingest and
@@ -517,6 +686,8 @@ def cmd_ingest(args: argparse.Namespace) -> int:
                 f"skip (already ingested as source id [{source_id}], "
                 f"hash {file_hash[:12]}): {name}"
             )
+            # Drain mode: move dup out of inbox to clear it (prevents spin).
+            _collision_safe_move(src, archive)
             summary.append((name, "skipped"))
             continue
         if is_new:
@@ -537,11 +708,10 @@ def cmd_ingest(args: argparse.Namespace) -> int:
             )
         except Exception as e:  # noqa: BLE001 -- surface the real failure, loudly
             _fail(f"engine error on {name}: {type(e).__name__}: {e}")
+            if src.is_file() and src.parent == inbox:
+                _collision_safe_move(src, failed_dir)
             summary.append((name, "error"))
-            if not args.keep_going:
-                _print_summary(summary)
-                return 1
-            continue
+            continue  # drain always continues; exit code is set after drain
 
         # Fix 1b: never trust agent-written process state. Undo + fail loud.
         violations = _detect_and_undo_tamper(wiki, before_state)
@@ -553,10 +723,9 @@ def cmd_ingest(args: argparse.Namespace) -> int:
             )
             for v in violations:
                 _fail(f"    - {v}")
+            if src.is_file() and src.parent == inbox:
+                _collision_safe_move(src, failed_dir)
             summary.append((name, "tampered"))
-            if not args.keep_going:
-                _print_summary(summary)
-                return 1
             continue
 
         if result.converged:
@@ -584,13 +753,15 @@ def cmd_ingest(args: argparse.Namespace) -> int:
                 f"{name}: did not converge "
                 f"(status={result.status}, reason={result.failure_reason})"
             )
+            if src.is_file() and src.parent == inbox:
+                _collision_safe_move(src, failed_dir)
             summary.append((name, "not-converged"))
-            if not args.keep_going:
-                _print_summary(summary)
-                return 1
+            # Drain mode: always continue (never halt on non-convergence).
 
     _print_summary(summary)
-    return 0
+    # Fail-loud after the drain: nonzero if anything went to _failed/.
+    failed_n = sum(1 for _, s in summary if s in {"error", "not-converged", "tampered"})
+    return 1 if failed_n else 0
 
 
 def _print_summary(summary: list[tuple[str, str]]) -> None:
@@ -598,6 +769,12 @@ def _print_summary(summary: list[tuple[str, str]]) -> None:
     for name, status in summary:
         mark = GREEN + "\u2713" if status == "converged" else YELLOW + "\u2022"
         print(f"  {mark}{RESET} {status:<14} {name}")
+    if summary:
+        failed_n = sum(
+            1 for _, s in summary if s in {"error", "not-converged", "tampered"}
+        )
+        converged_n = sum(1 for _, s in summary if s == "converged")
+        print(f"  total={len(summary)}  converged={converged_n}  failed={failed_n}")
 
 
 # ---------------------------------------------------------------------------
