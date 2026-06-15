@@ -167,10 +167,10 @@ def _parse_transcript_header(text: str) -> dict:
 
         Source: https://microsoft-my.sharepoint.com/...
         Duration: 1:00:50
-        Speakers: Chris Park, Brian Krabach, Samuel Lee
+        Speakers: Chris Park, Alex Rivera, Samuel Lee
         Date: 5/29/2026, 11:07:43 AM
         Chat type: Meeting
-        Attendees: Samuel Lee, Chris Park, Brian Krabach
+        Attendees: Samuel Lee, Chris Park, Alex Rivera
 
         ---
 
@@ -497,6 +497,31 @@ def _collision_safe_move(src: Path, dest_dir: Path) -> Path:
     raise RuntimeError(f"too many name collisions in {dest_dir} for {src.name}")
 
 
+def _looks_like_text(path: Path) -> bool:
+    """Return True if *path* appears to be a UTF-8 text file.
+
+    Reads up to 8 KB and applies two cheap binary checks:
+    - A NUL byte (``\\x00``) anywhere in the sample → binary.
+    - Failure to decode the sample as UTF-8 → binary.
+
+    Both checks cover the vast majority of common binary formats (images,
+    archives, executables, compiled blobs).  All plain-text source files
+    (.md, .py, .rs, .go, .yaml, .toml, .txt, etc.) pass both checks cleanly.
+    """
+    _SAMPLE = 8192
+    try:
+        sample = path.read_bytes()[:_SAMPLE]
+    except OSError:
+        return False
+    if b"\x00" in sample:
+        return False
+    try:
+        sample.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return True
+
+
 # ---------------------------------------------------------------------------
 # ingest (headline command) -- the OUTER corpus sweep
 # ---------------------------------------------------------------------------
@@ -529,6 +554,13 @@ def cmd_ingest(args: argparse.Namespace) -> int:
 
         for src in sources:
             name = src.name
+
+            # Text sniff: fail loud on binary source; don't pollute the registry.
+            if not _looks_like_text(src):
+                _fail(f"{name}: unsupported binary source (no text handler)")
+                summary.append((name, "binary"))
+                _print_summary(summary)
+                return 1
 
             # Fix 3: assign/look up a STABLE id by content hash BEFORE ingest
             # and dedupe an already-ingested source (same bytes) regardless of
@@ -636,7 +668,9 @@ def cmd_ingest(args: argparse.Namespace) -> int:
     # ---------------------------------------------------------------------- #
 
     # Warn + bail early if inbox is empty (preserves original UX; lazy import).
-    if not any(inbox.glob("*.md")):
+    if not any(
+        p for p in inbox.iterdir() if p.is_file() and not p.name.startswith(".")
+    ):
         _warn(f"no sources to ingest (inbox empty: {inbox})")
         return 0
 
@@ -658,7 +692,9 @@ def cmd_ingest(args: argparse.Namespace) -> int:
     _fresh_retries = 0
 
     while True:
-        pending = sorted(p for p in inbox.glob("*.md") if p.is_file())
+        pending = sorted(
+            p for p in inbox.iterdir() if p.is_file() and not p.name.startswith(".")
+        )
         now = time.time()
         ready = [p for p in pending if (now - p.stat().st_mtime) >= _DEBOUNCE_SECS]
 
@@ -674,6 +710,16 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         _fresh_retries = 0  # reset whenever we find a ready file
         src = ready[0]
         name = src.name
+
+        # Text sniff: route binary files to _failed/ without calling run_inner.
+        if not _looks_like_text(src):
+            _fail(
+                f"{src.name}: unsupported binary source (no text handler)"
+                " — routing to _failed/"
+            )
+            _collision_safe_move(src, failed_dir)
+            summary.append((src.name, "binary"))
+            continue
 
         # Fix 3: assign/look up a STABLE id by content hash BEFORE ingest and
         # dedupe an already-ingested source (same bytes) regardless of filename.
@@ -760,7 +806,9 @@ def cmd_ingest(args: argparse.Namespace) -> int:
 
     _print_summary(summary)
     # Fail-loud after the drain: nonzero if anything went to _failed/.
-    failed_n = sum(1 for _, s in summary if s in {"error", "not-converged", "tampered"})
+    failed_n = sum(
+        1 for _, s in summary if s in {"error", "not-converged", "tampered", "binary"}
+    )
     return 1 if failed_n else 0
 
 
@@ -771,7 +819,9 @@ def _print_summary(summary: list[tuple[str, str]]) -> None:
         print(f"  {mark}{RESET} {status:<14} {name}")
     if summary:
         failed_n = sum(
-            1 for _, s in summary if s in {"error", "not-converged", "tampered"}
+            1
+            for _, s in summary
+            if s in {"error", "not-converged", "tampered", "binary"}
         )
         converged_n = sum(1 for _, s in summary if s == "converged")
         print(f"  total={len(summary)}  converged={converged_n}  failed={failed_n}")
@@ -856,12 +906,18 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         )
         ok = False
 
-    pipeline_bundle = Path(ATTRACTOR_PIPELINE_LOCAL)
-    if pipeline_bundle.is_file():
-        _ok(f"attractor-pipeline bundle found: {pipeline_bundle}")
+    if ATTRACTOR_PIPELINE_LOCAL:
+        pipeline_bundle = Path(ATTRACTOR_PIPELINE_LOCAL)
+        if pipeline_bundle.is_file():
+            _ok(f"attractor-pipeline bundle found: {pipeline_bundle}")
+        else:
+            _warn(
+                f"WIKI_WEAVER_ATTRACTOR_PIPELINE set but path missing ({pipeline_bundle});"
+                " will fall back to git URL"
+            )
     else:
         _warn(
-            f"local attractor-pipeline missing ({pipeline_bundle}); will fall back to git URL"
+            "WIKI_WEAVER_ATTRACTOR_PIPELINE not set; will load attractor-pipeline from git URL"
         )
 
     # context-intelligence hook config (server_url + api_key) from settings.
