@@ -110,6 +110,7 @@ def validate(wiki_dir: Path, *, config: dict | None = None) -> dict:
     bad_fm: list[str] = []
     no_source: list[str] = []
     broken_links: list[str] = []
+    obsidian_broken: list[str] = []  # S1b: target not a direct filename-stem match
 
     for p in pages:
         text = p.read_text(encoding="utf-8", errors="replace")
@@ -132,6 +133,13 @@ def validate(wiki_dir: Path, *, config: dict | None = None) -> dict:
                 inbound[page_id] += 1
             else:
                 broken_links.append(f"{p.name} -> [[{tgt}]]")
+            # S1b: Obsidian-resolvability — target must be a DIRECT filename-stem
+            # match so Obsidian can resolve the link without slug awareness.
+            # After `normalize` runs in-pipeline all links are [[slug|Title]],
+            # so in-pipeline wikis always satisfy this; the gate closes the
+            # "validator-valid ≠ Obsidian-clickable" divergence permanently.
+            if not (wiki_dir / (tgt + ".md")).exists():
+                obsidian_broken.append(f"{p.name} -> [[{tgt}]]")
 
     orphans = [k for k, n in inbound.items() if n == 0 and k not in nav_pages]
 
@@ -139,6 +147,10 @@ def validate(wiki_dir: Path, *, config: dict | None = None) -> dict:
         "S1_link_integrity": {
             "broken": len(broken_links),
             "detail": broken_links[:20],
+        },
+        "S1b_obsidian_resolvability": {
+            "broken": len(obsidian_broken),
+            "detail": obsidian_broken[:20],
         },
         "S2_no_orphans": {"orphans": len(orphans), "detail": sorted(orphans)[:20]},
         "S3_frontmatter": {
@@ -149,6 +161,11 @@ def validate(wiki_dir: Path, *, config: dict | None = None) -> dict:
     }
     if broken_links:
         result["failures"].append(f"S1: {len(broken_links)} unresolved wikilink(s)")
+    if obsidian_broken:
+        result["failures"].append(
+            f"S1b: {len(obsidian_broken)} link(s) not directly Obsidian-resolvable"
+            " (use [[slug|Title]] form)"
+        )
     if orphans:
         result["failures"].append(f"S2: {len(orphans)} orphan page(s)")
     if missing_fm:
