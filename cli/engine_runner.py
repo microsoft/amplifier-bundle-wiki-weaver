@@ -38,6 +38,11 @@ from .policy import WikiPolicy, load_policy
 WIKI_WEAVER_ROOT = Path(__file__).resolve().parent.parent
 PIPELINE_DIR = WIKI_WEAVER_ROOT / "pipeline"
 INNER_DOT = PIPELINE_DIR / "synthesize.dot"
+# ingest.dot: the parent DAG that invokes synthesize.dot as a folder sub-pipeline.
+INGEST_DOT = PIPELINE_DIR / "ingest.dot"
+# ingest_setup.py: the tool node that picks the next inbox source + assigns a
+# stable id before the synthesize.dot folder sub-pipeline runs.
+INGEST_SETUP_PY = Path(__file__).resolve().parent / "ingest_setup.py"
 SCHEMA_PATH = PIPELINE_DIR / "SCHEMA.md"
 VALIDATE_PY = PIPELINE_DIR / "validate_wiki.py"
 NORMALIZE_PY = PIPELINE_DIR / "normalize_links.py"
@@ -162,7 +167,11 @@ def build_dot(
     source_id: int | str = "",
 ) -> str:
     """Read the inner DOT, substitute its required context variables with
-    concrete ABSOLUTE paths, then inject ``llm_provider`` on each LLM node.
+    concrete ABSOLUTE paths.
+
+    ``llm_provider`` and ``llm_model`` are declared directly in synthesize.dot
+    (making the DOT self-contained so it works both as a direct pipeline and as
+    a folder sub-pipeline without requiring build_dot injection).
 
     ``policy`` — the resolved WikiPolicy for this wiki (from load_policy).
     Default policy (no project policy/ dir) produces byte-identical output
@@ -216,27 +225,9 @@ def build_dot(
     for var, value in substitutions.items():
         dot = dot.replace(var, value)
 
-    # Inject explicit llm_provider + llm_model on each LLM node. The provider
-    # routes the node to the matching child agent (provider->agent map lives in
-    # the bundle's orchestrator config); the model is required because the
-    # attractor child agents carry no default_model. Anchor on the line-leading
-    # declaration so the [[wikilinks]] inside prompt strings are never mistaken
-    # for attributes.
-    #
-    # Per-node model: policy.model_for(nid) allows stage-level model tiering
-    # (e.g. cheap model for feedback, strong model for assess).  For default
-    # policy all stages resolve to the same model — byte-identical to pre-Phase-D.
-    re_attr = f' reasoning_effort="{REASONING_EFFORT}",' if REASONING_EFFORT else ""
-    for nid in LLM_NODE_IDS:
-        nid_model = policy.model_for(nid)
-        attrs = (
-            f'        llm_provider="{policy.provider}", '
-            f'llm_model="{nid_model}",{re_attr}\n'
-        )
-        opener = f"    {nid} [\n"
-        if opener in dot and "llm_provider" not in dot.split(opener, 1)[1][:200]:
-            dot = dot.replace(opener, opener + attrs, 1)
-
+    # NOTE: llm_provider and llm_model are now declared directly in synthesize.dot
+    # (baked in as self-contained attrs so the DOT works as both a direct pipeline
+    # and a folder sub-pipeline without requiring Python injection here).
     return dot
 
 
@@ -965,6 +956,59 @@ def run_inner(
 
     dot_source = build_dot(source_path, wiki_dir, policy, source_id=source_id)
     (logs_dir / "inner.dot").write_text(dot_source, encoding="utf-8")
+
+    _text, data = asyncio.run(
+        _run_pipeline(dot_source, logs_dir, wiki_dir, wiki_dir=wiki_dir)
+    )
+    status = data.get("status", "unknown")
+    return InnerResult(
+        status=status,
+        converged=status == "success",
+        logs_dir=logs_dir,
+        notes=str(data.get("notes", ""))[:2000],
+        failure_reason=data.get("failure_reason"),
+    )
+
+
+def run_ingest(
+    wiki_dir: str | Path,
+    max_cycles: int | None = None,
+) -> InnerResult:
+    """Run the ingest pipeline for the next inbox source via ingest.dot.
+
+    ``ingest.dot`` orchestrates:
+      1. A setup tool node (ingest_setup.py) that picks the next inbox source
+         and assigns a stable source id, publishing context keys as JSON.
+      2. A folder sub-pipeline (synthesize.dot) that integrates the source,
+         inheriting the context keys from step 1.
+
+    This is the first increment: no drain / tamper-check / archive yet.
+    Those ride in subsequent increments once the composition is proven.
+
+    ``max_cycles`` is currently unused (the policy is read by ingest_setup.py
+    and passed as a context key into synthesize.dot). Retained for API
+    symmetry with run_inner.
+    """
+    import sys
+
+    wiki_dir = Path(wiki_dir).resolve()
+    if not wiki_dir.is_dir():
+        raise FileNotFoundError(f"wiki dir not found: {wiki_dir}")
+
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    logs_dir = wiki_dir / ".runs" / f"ingest-{timestamp}"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+
+    # Substitute compile-time tokens in ingest.dot (paths that must be
+    # absolute concrete values, NOT expanded from engine context).
+    dot_template = INGEST_DOT.read_text(encoding="utf-8")
+    setup_cmd = f"{sys.executable} {INGEST_SETUP_PY} {wiki_dir} {wiki_dir}"
+    synthesize_dot_abs = str(INNER_DOT)
+
+    dot_source = dot_template.replace("$setup_cmd", setup_cmd)
+    dot_source = dot_source.replace("$synthesize_dot", synthesize_dot_abs)
+
+    (logs_dir / "ingest.dot").write_text(dot_source, encoding="utf-8")
 
     _text, data = asyncio.run(
         _run_pipeline(dot_source, logs_dir, wiki_dir, wiki_dir=wiki_dir)

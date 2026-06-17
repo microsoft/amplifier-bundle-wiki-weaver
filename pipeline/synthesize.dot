@@ -39,6 +39,8 @@ digraph synthesize {
     // and surface contradictions per the schema. Updates existing pages,
     // never creates per-source duplicates.
     ingest [
+        llm_provider="anthropic",
+        llm_model="claude-sonnet-4-6",
         label="Ingest Source",
         goal_gate=true,
         retry_target="ingest",
@@ -81,6 +83,8 @@ digraph synthesize {
     // forever on a single freshly-ingested article). MUST set
     // preferred_label=converged or =refine.
     assess [
+        llm_provider="anthropic",
+        llm_model="claude-sonnet-4-6",
         label="Assess Quality",
         goal_gate=true,
         retry_target="assess",
@@ -89,6 +93,8 @@ digraph synthesize {
 
     // FEEDBACK (LLM): only on refine. Targeted guidance for next cycle.
     feedback [
+        llm_provider="anthropic",
+        llm_model="claude-sonnet-4-6",
         label="Write Feedback",
         prompt="Write targeted refinement guidance for the next ingest cycle.\n\nREAD THE DETERMINISTIC VALIDATOR FIRST: read $validation_report. If it says FAIL, that result -- NOT any quality assessment -- is your primary input. Your #1 job is remediation guidance that fixes EACH listed failure verbatim: name every broken [[wikilink]], orphan page, missing/invalid-frontmatter page, and uncited page it lists, and say concretely how the next ingest cycle must resolve each one (create the missing target page with real grounded content, add an inbound link, add frontmatter/sources, etc.). Do NOT treat the wiki as converged while $validation_report shows FAIL, regardless of what any assessment claims.\n\nThen read .ai/assessment.md and any prior files in .ai/feedback/ for secondary quality context only.\nWrite a new file to .ai/feedback/ using the Pyramid Summary pattern:\n  1. Key finding (1 sentence) -- the most important gap (lead with the validator failure if there is one).\n  2. What to change (3-5 specific, actionable bullets) -- EACH listed validator failure FIRST (which broken link to fix, which orphan to link, which page to cite), then any quality deltas.\n  3. Why it matters (1-2 sentences) -- how it moves toward a coherent, link-valid wiki.\nFocus only on the delta needed to converge.\n\nAfter writing the feedback file, your FINAL message MUST be a one-line confirmation naming the feedback file you wrote. Do not end with an empty message."
     ]

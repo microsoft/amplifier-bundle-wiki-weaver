@@ -1,0 +1,50 @@
+// ingest.dot -- Increment 1: ingest ONE inbox source via synthesize.dot.
+//
+// Minimal parent DAG:
+//   setup (tool, deterministic) -- picks next inbox source, assigns stable id,
+//                                   publishes JSON context for synthesize.dot.
+//   run_synthesize (folder)     -- runs synthesize.dot as a sub-pipeline;
+//                                   child inherits the setup context keys.
+//
+// Compile-time tokens substituted by run_ingest() before handing to the engine:
+//   $setup_cmd       -- absolute path command to cli/ingest_setup.py
+//   $synthesize_dot  -- absolute path to pipeline/synthesize.dot
+//
+// Context keys produced by the setup node (via parse_json="true") and consumed
+// by synthesize.dot as $var references:
+//   source_path, source_id, wiki_dir, validation_report,
+//   schema_path, convergence_rubric, max_cycles,
+//   normalize_cmd, footnotes_cmd, validate_cmd
+//
+// NOT YET in this increment: drain loop, tamper check, archive, ledger write.
+// Those ride in Increment 2 once folder composition is proven end-to-end.
+
+digraph ingest {
+    graph [
+        goal="Ingest one inbox source into the wiki via synthesize.dot"
+    ]
+
+    start [shape=Mdiamond, label="Start"]
+
+    // SETUP (deterministic tool): pick next inbox source, assign stable id,
+    // emit JSON context keys for synthesize.dot to consume.
+    setup [
+        shape=parallelogram,
+        label="Setup: pick source + assign id",
+        tool_command="$setup_cmd",
+        parse_json="true"
+    ]
+
+    // RUN_SYNTHESIZE (folder sub-pipeline): runs synthesize.dot with the
+    // context keys produced by the setup node.  The child context is a clone
+    // of the parent context, so $source_path/$wiki_dir/etc. resolve directly.
+    run_synthesize [
+        shape=folder,
+        label="Synthesize source",
+        dot_file="$synthesize_dot"
+    ]
+
+    done [shape=Msquare, label="Done"]
+
+    start -> setup -> run_synthesize -> done
+}
