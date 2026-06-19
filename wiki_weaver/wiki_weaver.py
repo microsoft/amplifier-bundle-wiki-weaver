@@ -2,7 +2,7 @@
 #!/usr/bin/env python3
 """wiki-weaver CLI.
 
-Thin argparse wrapper around the importable lib API (cli.lib).
+Thin argparse wrapper around the importable lib API (wiki_weaver.lib).
 
 Subcommands:
     init <wiki_dir>            scaffold a fresh wiki
@@ -16,14 +16,13 @@ Subcommands:
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 
-from cli import __version__
+from wiki_weaver import __version__
 
 # ---------------------------------------------------------------------------
-# Re-exports: symbols imported by tests from cli.wiki_weaver (backward compat)
+# Re-exports: symbols imported by tests from wiki_weaver.wiki_weaver (backward compat)
 # ---------------------------------------------------------------------------
-from cli.lib import (
+from wiki_weaver.lib import (
     ARCHIVE,
     FAILED,
     INBOX,
@@ -37,7 +36,6 @@ from cli.lib import (
     init,
     lint,
     query,
-    rag,
 )
 
 __all__ = [
@@ -57,19 +55,18 @@ __all__ = [
     "doctor",
     "query",
     "ask",
-    "rag",
 ]
 
 
 # ---------------------------------------------------------------------------
 # cmd_* wrappers: unpack argparse.Namespace → call lib function
 # ---------------------------------------------------------------------------
-# These stay here (not in lib) so they remain importable from cli.wiki_weaver,
+# These stay here (not in lib) so they remain importable from wiki_weaver.wiki_weaver,
 # which is what existing tests and the main() dispatch expect.
 
 
 def cmd_init(args: argparse.Namespace) -> int:
-    from cli.engine_runner import run_init
+    from wiki_weaver.engine_runner import run_init
 
     return run_init(
         args.wiki_dir,
@@ -89,7 +86,7 @@ def cmd_ingest(args: argparse.Namespace) -> int:
 
 
 def cmd_lint(args: argparse.Namespace) -> int:
-    from cli.engine_runner import run_lint
+    from wiki_weaver.engine_runner import run_lint
 
     return run_lint(args.wiki)
 
@@ -104,10 +101,6 @@ def cmd_query(args: argparse.Namespace) -> int:
 
 def cmd_ask(args: argparse.Namespace) -> int:
     return ask(args.wiki, args.question, json_out=args.json_out)
-
-
-def cmd_rag(args: argparse.Namespace) -> int:
-    return rag(args.articles, args.question, json_out=args.json_out)
 
 
 # ---------------------------------------------------------------------------
@@ -195,23 +188,6 @@ def main() -> None:
         help="output JSON: {answer, pages_used, refused}",
     )
 
-    p_rag = sub.add_parser(
-        "rag",
-        help="naive-RAG baseline: answer from raw source articles (A/B variant B)",
-    )
-    p_rag.add_argument("question", help="question to answer")
-    p_rag.add_argument(
-        "--articles",
-        default=str(Path.home() / "medium_articles"),
-        help="raw articles directory (default: ~/medium_articles)",
-    )
-    p_rag.add_argument(
-        "--json",
-        dest="json_out",
-        action="store_true",
-        help="output JSON: {answer, pages_used, refused}",
-    )
-
     args = parser.parse_args()
 
     dispatch = {
@@ -221,7 +197,6 @@ def main() -> None:
         "doctor": cmd_doctor,
         "query": cmd_query,
         "ask": cmd_ask,
-        "rag": cmd_rag,
     }
     if args.command is None:
         parser.print_help()

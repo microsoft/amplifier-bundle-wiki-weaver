@@ -24,7 +24,7 @@ from unittest.mock import patch
 _REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO))
 
-from cli.wiki_weaver import ARCHIVE, FAILED, INBOX, cmd_ingest  # noqa: E402
+from wiki_weaver.wiki_weaver import ARCHIVE, FAILED, INBOX, cmd_ingest  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -121,7 +121,7 @@ def test_a_reglov_picks_up_mid_drain_addition(tmp_path: Path) -> None:
             os.utime(new_file, (old, old))
         return _fake_result(True)
 
-    with patch("cli.engine_runner.run_inner", side_effect=mock_run):
+    with patch("wiki_weaver.engine_runner.run_inner", side_effect=mock_run):
         rc = cmd_ingest(_args(wiki))
 
     assert rc == 0, "all sources converged — exit code should be 0"
@@ -169,7 +169,7 @@ def test_b_failed_source_routes_to_failed_dir(tmp_path: Path) -> None:
             raise RuntimeError("simulated engine failure")
         return _fake_result(True)
 
-    with patch("cli.engine_runner.run_inner", side_effect=mock_run):
+    with patch("wiki_weaver.engine_runner.run_inner", side_effect=mock_run):
         rc = cmd_ingest(_args(wiki))
 
     # Inbox must be empty — all 3 files must have been dispatched.
@@ -227,7 +227,7 @@ def test_c_duplicate_cleared_from_inbox_no_spin(tmp_path: Path) -> None:
         json.dumps(registry, indent=2), encoding="utf-8"
     )
 
-    with patch("cli.engine_runner.run_inner") as mock_run:
+    with patch("wiki_weaver.engine_runner.run_inner") as mock_run:
         rc = cmd_ingest(_args(wiki))
 
     # run_inner must NOT be called for a duplicate.
@@ -266,7 +266,7 @@ def test_r_single_source_path_regression(tmp_path: Path) -> None:
     source_file.write_text("# External Source\n\nBody text.\n", encoding="utf-8")
 
     with patch(
-        "cli.engine_runner.run_inner", return_value=_fake_result(True)
+        "wiki_weaver.engine_runner.run_inner", return_value=_fake_result(True)
     ) as mock_run:
         rc = cmd_ingest(_args(wiki, source=str(source_file)))
 

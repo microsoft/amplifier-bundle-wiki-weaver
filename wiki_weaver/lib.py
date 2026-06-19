@@ -13,7 +13,6 @@ lint(wiki)                          run the structural validator
 doctor(*, wiki)                     environment diagnostics
 query(wiki, term)                   list pages matching a term (stub)
 ask(wiki, question, *, json_out)    answer a question from the compiled wiki
-rag(articles, question, *, json_out) naive-RAG baseline from raw sources
 
 All functions print their own output (unchanged from the original cmd_*
 behaviour) and return an integer exit code (0 = success).
@@ -257,13 +256,13 @@ def _read_source_frontmatter(src: Path) -> dict:
     silently on any parse error — provenance is best-effort; missing fields are
     stored as ``None`` in the registry, never as fabrications.
 
-    Recognises both ``source:`` and ``url:`` as the URL field (medium-tools
-    writes ``source:``, other producers may write ``url:``).
+    Recognises both ``source:`` and ``url:`` as the URL field (acquisition
+    tools typically write ``source:``, other producers may write ``url:``).
 
     Fallback: when no YAML frontmatter is found, attempts to parse a
     meeting-transcript header block via :func:`_parse_transcript_header`.
     Sources with neither frontmatter nor transcript markers are unchanged
-    (returns all-None). The medium-article path is byte-identical.
+    (returns all-None).
     """
     result: dict = {"author": None, "url": None, "date": None}
     try:
@@ -584,7 +583,7 @@ def ingest(
 
         # Import the engine runner lazily so `doctor`/`init`/`lint` never pay
         # the cost of pulling in the attractor engine.
-        from cli.engine_runner import run_inner
+        from wiki_weaver.engine_runner import run_inner
 
         processed = _processed_sources(wiki)
         summary: list[tuple[str, str]] = []
@@ -713,7 +712,7 @@ def ingest(
 
     # Import the engine runner lazily so `doctor`/`init`/`lint` never pay the
     # cost of pulling in the attractor engine.
-    from cli.engine_runner import run_inner
+    from wiki_weaver.engine_runner import run_inner
 
     processed = _processed_sources(wiki)
     summary_drain: list[tuple[str, str]] = []
@@ -894,7 +893,7 @@ def doctor(*, wiki: str | Path | None = None) -> int:
 
     # Engine runner imports cleanly (no engine cost yet).
     try:
-        from cli.engine_runner import (
+        from wiki_weaver.engine_runner import (
             ATTRACTOR_PIPELINE_LOCAL,
             load_ci_config,
         )
@@ -993,7 +992,7 @@ def doctor(*, wiki: str | Path | None = None) -> int:
         # user can verify that project overrides are being picked up correctly.
         if wiki_path.is_dir():
             try:
-                from cli.policy import load_policy
+                from wiki_weaver.policy import load_policy
 
                 policy = load_policy(wiki_path)
                 _ok(f"  policy.schema:          {policy.schema_path}")
@@ -1069,7 +1068,7 @@ def ask(
         _fail(f"wiki dir not found: {wiki_path}")
         return 1
 
-    from cli.engine_runner import run_ask
+    from wiki_weaver.engine_runner import run_ask
 
     _warn(f"asking wiki at {wiki_path!r}: {question!r}")
     try:
@@ -1096,51 +1095,4 @@ def ask(
     return 0
 
 
-# ---------------------------------------------------------------------------
-# rag -- naive-RAG baseline: answer from raw source articles (Phase B A/B)
-# ---------------------------------------------------------------------------
-#
-# Variant B of the A/B comparison: the SAME mechanism as ask (bash/web removed,
-# writes denied, reads scoped) but pointed at the RAW article directory instead
-# of the compiled wiki. The only variable is synthesis.
 
-
-def rag(
-    articles: str | Path = "~/medium_articles",
-    question: str = "",
-    *,
-    json_out: bool = False,
-) -> int:
-    """Naive-RAG baseline: answer from raw source articles (A/B variant B)."""
-    import json as _json
-
-    articles_path = Path(articles).expanduser().resolve()
-    if not articles_path.is_dir():
-        _fail(f"articles dir not found: {articles_path}")
-        return 1
-
-    from cli.engine_runner import run_rag
-
-    _warn(f"RAG baseline over articles at {articles_path!r}: {question!r}")
-    try:
-        result = run_rag(articles_path, question)
-    except Exception as e:  # noqa: BLE001
-        _fail(f"rag error: {type(e).__name__}: {e}")
-        return 1
-
-    if json_out:
-        print(
-            _json.dumps(
-                {
-                    "answer": result.answer,
-                    "pages_used": result.pages_used,
-                    "refused": result.refused,
-                },
-                indent=2,
-            )
-        )
-    else:
-        print(result.answer)
-        if result.pages_used:
-            print(f"\nArticles consulted: {', '.join(result.pages_used)}")
-    return 0

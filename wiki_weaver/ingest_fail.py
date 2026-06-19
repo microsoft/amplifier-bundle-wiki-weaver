@@ -23,7 +23,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-# Ensure the repo root is on sys.path so `from cli.* import` works when
+# Ensure the repo root is on sys.path so `from wiki_weaver.* import` works when
 # this script is invoked directly (e.g. via tool_command in ingest.dot).
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
@@ -45,7 +45,7 @@ def main() -> int:
         print(f"ERROR: wiki_dir not found: {wiki_dir}", file=sys.stderr)
         return 1
 
-    from cli.lib import FAILED, _collision_safe_move
+    from wiki_weaver.lib import FAILED, _collision_safe_move
 
     failed_dir = wiki_dir / FAILED
     failed_dir.mkdir(exist_ok=True)

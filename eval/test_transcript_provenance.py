@@ -33,7 +33,7 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO))
 
-from cli.wiki_weaver import (  # noqa: E402
+from wiki_weaver.wiki_weaver import (  # noqa: E402
     REGISTRY_NAME,
     _assign_source_id,
     _parse_transcript_header,
@@ -97,12 +97,12 @@ Just a plain markdown file with no YAML header and no transcript markers.
 This simulates the existing "no provenance" scenario.
 """
 
-# YAML frontmatter (medium-tools style) — regression fixture
+# YAML frontmatter (source: field style) — regression fixture
 _YAML_FRONTMATTER = """\
 ---
 title: "Sample Article About LLMs"
 author: "Jane Doe"
-source: "https://medium.com/sample-article-abc123"
+source: "https://example.com/sample-article-abc123"
 date: "2024-05-01"
 ---
 
@@ -218,7 +218,7 @@ class TestReadSourceFrontmatterWithTranscriptFallback:
         src.write_text(_YAML_FRONTMATTER, encoding="utf-8")
         result = _read_source_frontmatter(src)
         assert result["author"] == "Jane Doe"
-        assert result["url"] == "https://medium.com/sample-article-abc123"
+        assert result["url"] == "https://example.com/sample-article-abc123"
         assert result["date"] == "2024-05-01"
 
 

@@ -10,7 +10,7 @@
   --accent-soft: #8E8CF0;
 
   --font-headline: clamp(34px, 7.5vw, 70px);
-  --font-medium-headline: clamp(24px, 5vw, 46px);
+  --font-section-headline: clamp(24px, 5vw, 46px);
   --font-subhead: clamp(16px, 3vw, 30px);
   --fs-body: clamp(14px, 2vw, 17px);
   --fs-small: clamp(12px, 1.7vw, 14px);
@@ -72,8 +72,8 @@ body {
   letter-spacing: -1.5px;
   line-height: 1.05;
 }
-.medium-headline {
-  font-size: var(--font-medium-headline);
+.section-headline {
+  font-size: var(--font-section-headline);
   font-weight: 700;
   letter-spacing: -1px;
   line-height: 1.1;
@@ -258,7 +258,7 @@ body {
 <div class="slide">
   <div class="maxw">
     <div class="section-label">What It Is</div>
-    <h2 class="medium-headline">A declarative convergence loop.</h2>
+    <h2 class="section-headline">A declarative convergence loop.</h2>
     <p class="lead">Andrej Karpathy's "LLM Wiki / second brain," made real: <strong style="color:var(--text-primary)">compile</strong> sources into one-concept-per-page notes that cross-link and merge. Authored as a <strong style="color:var(--text-primary)">graph</strong> — nodes and edges in DOT, run by the attractor engine — not as imperative script.</p>
     <div class="split">
       <div class="card">
@@ -279,7 +279,7 @@ body {
 <div class="slide">
   <div class="maxw">
     <div class="section-label">What It Looks Like · The Flow</div>
-    <h2 class="medium-headline">Code-first. Agents where they earn it.</h2>
+    <h2 class="section-headline">Code-first. Agents where they earn it.</h2>
     <div class="flow">
       <div class="node agent"><div class="nlabel">ingest</div><div class="nrole">agent · synthesis</div></div>
       <span class="arrow">→</span>
@@ -306,8 +306,8 @@ body {
 <div class="slide">
   <div class="maxw">
     <div class="section-label">Why A Pipeline</div>
-    <h2 class="medium-headline">Specialists with quality gates — not one big prompt in a loop.</h2>
-    <p class="lead">The honest baseline is the real <span class="mono">medium-tools</span> CLI — a useful <em>acquisition</em> tool (<span class="mono">login → sync → download → summarize</span>) that fills the <span class="mono">_inbox/</span> with one-shot per-article summaries. Acquiring is a different job from <em>compiling a connected wiki</em>. That gap is where the loop earns its place.</p>
+    <h2 class="section-headline">Specialists with quality gates — not one big prompt in a loop.</h2>
+    <p class="lead">The honest baseline is the real <span class="mono">an acquisition CLI</span> — a useful <em>acquisition</em> tool (<span class="mono">login → sync → download → summarize</span>) that fills the <span class="mono">_inbox/</span> with one-shot per-article summaries. Acquiring is a different job from <em>compiling a connected wiki</em>. That gap is where the loop earns its place.</p>
     <table class="vs-table">
       <thead>
         <tr><th class="axis">Axis</th><th class="col-cli">One-shot CLI</th><th class="col-ww">Wiki-Weaver</th></tr>
@@ -321,7 +321,7 @@ body {
         <tr><td class="axis">Extend</td><td class="cli"><span class="x-mark">✗</span> Edit a 3,400-line orchestrator</td><td class="ww col-ww-cell"><span class="check-mark">✓</span> <strong>Edit the graph</strong> — add a node, reroute an edge</td></tr>
       </tbody>
     </table>
-    <p class="small-text" style="margin-top:12px;">Axes drawn from the real <span class="mono">medium-tools-architecture.dot</span> (incl. its documented summarize bugs). The two are complementary: the CLI acquires, the pipeline compiles.</p>
+    <p class="small-text" style="margin-top:12px;">Axes drawn from the real <span class="mono">the acquisition tool architecture</span> (incl. its documented summarize bugs). The two are complementary: the CLI acquires, the pipeline compiles.</p>
   </div>
 </div>
 
@@ -329,7 +329,7 @@ body {
 <div class="slide">
   <div class="maxw">
     <div class="section-label">What It Looks Like · The Artifact</div>
-    <h2 class="medium-headline">One concept per page. Linked, cited, honest.</h2>
+    <h2 class="section-headline">One concept per page. Linked, cited, honest.</h2>
     <div class="code-block"><span class="code-comment">--- long-term-memory-for-llms.md ---</span>
 <span class="code-key">title:</span> Long-term Memory for LLMs
 <span class="code-key">sources:</span> <span class="code-link">[1, 2, 3]</span>          <span class="code-comment"># provenance accrues as sources merge</span>
@@ -360,7 +360,7 @@ combining [[<span class="code-link">Vector-based Memory Systems</span>]] with
 <div class="slide">
   <div class="maxw">
     <div class="section-label">It's Real · Evals-Driven</div>
-    <h2 class="medium-headline">Verified, not asserted.</h2>
+    <h2 class="section-headline">Verified, not asserted.</h2>
     <table class="data-table">
       <thead><tr><th>Property</th><th>Evidence</th></tr></thead>
       <tbody>
@@ -372,7 +372,7 @@ combining [[<span class="code-link">Vector-based Memory Systems</span>]] with
         <tr><td><strong>Reliable</strong></td><td>Final run: <strong>4/4 converged</strong>, validator PASS.</td></tr>
       </tbody>
     </table>
-    <p class="small-text" style="margin-top:14px;">Data as of 2026-06-11. Claims quoted from real files in <span class="mono">runs/{proof,holdout,contradiction,final}</span>; CLI baseline read from <span class="mono">medium-tools/</span>. Scope: numbers reflect the named proof runs — broader corpus-scale awaits the next pile.</p>
+    <p class="small-text" style="margin-top:14px;">Data as of 2026-06-11. Claims quoted from real files in <span class="mono">runs/{proof,holdout,contradiction,final}</span>; CLI baseline read from <span class="mono">the acquisition CLI baseline</span>. Scope: numbers reflect the named proof runs — broader corpus-scale awaits the next pile.</p>
   </div>
 </div>
 
@@ -380,7 +380,7 @@ combining [[<span class="code-link">Vector-based Memory Systems</span>]] with
 <div class="slide">
   <div class="maxw">
     <div class="section-label">Honest Gaps</div>
-    <h2 class="medium-headline">Two non-blocking residuals.</h2>
+    <h2 class="section-headline">Two non-blocking residuals.</h2>
     <div class="split">
       <div class="card">
         <span class="icon-card" style="color:var(--warn)">⚠️</span>

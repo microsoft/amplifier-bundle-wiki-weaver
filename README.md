@@ -32,18 +32,18 @@ without any tooling.
 ## Quick start
 
 `wiki-weaver` runs under an [Amplifier](https://github.com/microsoft/amplifier) Python
-interpreter (see [Requirements](#requirements)). Invoke it as `python -m cli <command>` from
+interpreter (see [Requirements](#requirements)). Invoke it as `python -m wiki_weaver <command>` from
 the repo root (the `wiki-weaver` console script is equivalent if installed).
 
 ```bash
 cd wiki-weaver
 
 # 0. Preflight — verifies the runtime, provider key, and validator are all present.
-python -m cli doctor
+python -m wiki_weaver doctor
 
 # 1. Create a wiki and design a schema for YOUR purpose (one LLM call, ~30–60s).
 #    The --purpose text should describe the intended use and the outcomes you want.
-python -m cli init mywiki \
+python -m wiki_weaver init mywiki \
   --purpose "A personal research second-brain on distributed systems: answer 'which
   approach fits problem X', compare trade-offs between techniques, and track how my
   conclusions evolve as I read more."
@@ -53,17 +53,17 @@ cp ~/notes/*.md mywiki/_inbox/
 
 # 3. Weave the sources in. Re-run any time you add more to _inbox/ — it picks up where
 #    it left off (already-ingested sources are deduped by content hash).
-python -m cli ingest --wiki mywiki --max-cycles 5
+python -m wiki_weaver ingest --wiki mywiki --max-cycles 5
 
 # 4. Ask questions — answered by reading the compiled wiki, with citations.
-python -m cli ask "what are the trade-offs between leader-based and leaderless replication?" \
+python -m wiki_weaver ask "what are the trade-offs between leader-based and leaderless replication?" \
   --wiki mywiki
 
 # 5. Structurally validate the wiki (exit 0 = PASS).
-python -m cli lint --wiki mywiki
+python -m wiki_weaver lint --wiki mywiki
 ```
 
-Prefer a generic, no-LLM scaffold? `python -m cli init mywiki --plain` skips schema design and
+Prefer a generic, no-LLM scaffold? `python -m wiki_weaver init mywiki --plain` skips schema design and
 uses the built-in generic schema (free, instant). You can always `ingest`/`ask`/`lint` the same
 way afterward.
 
@@ -82,7 +82,7 @@ way afterward.
 
 ## Three ways to use it
 
-**1. CLI (primary surface).** The commands above, via `python -m cli <command>` or the
+**1. CLI (primary surface).** The commands above, via `python -m wiki_weaver <command>` or the
 `wiki-weaver` console script. This is the supported, end-to-end path.
 
 **2. As a library.** The commands are thin wrappers over importable functions in
@@ -90,7 +90,7 @@ way afterward.
 standalone `pip install`.
 
 ```python
-from cli.engine_runner import run_init, run_ingest, run_ask, run_lint
+from wiki_weaver.engine_runner import run_init, run_ingest, run_ask, run_lint
 
 run_init("mywiki", purpose="A research second-brain on distributed systems …")
 # ... drop sources into mywiki/_inbox/ ...
@@ -159,7 +159,7 @@ richest synthesis via `WIKI_WEAVER_MODEL`.
   the attractor engine and routes to a configured LLM provider. Run wiki-weaver under the
   Amplifier Python interpreter (e.g. `~/.local/share/uv/tools/amplifier/bin/python3`); the
   `amplifier_foundation` and `unified_llm` packages are supplied by that runtime, **not** by
-  `pip install`. `python -m cli doctor` verifies they're importable.
+  `pip install`. `python -m wiki_weaver doctor` verifies they're importable.
 - `ANTHROPIC_API_KEY` (or the relevant provider key) set in the environment.
 
 ## Contributing

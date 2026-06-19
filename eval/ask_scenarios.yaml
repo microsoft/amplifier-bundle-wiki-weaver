@@ -20,7 +20,7 @@
 
 meta:
   wiki_under_test: runs/corpus/wiki
-  raw_corpus_for_baseline: ~/medium_articles      # the RAW source articles (pre-synthesis)
+  raw_corpus_for_baseline: ~/wiki_sources          # the RAW source articles (pre-synthesis)
   thesis: "The compiled wiki replaces RAG: answer by reading index + pages + [[wikilinks]], not embeddings."
   held_out_ids: [L2, S1, A3]   # do NOT tune prompts/grader against these — generalization guard
   scenario_counts: {single_page: 3, cross_source: 3, absent: 3}
@@ -209,33 +209,3 @@ grader:
       pass_if: "fail_loud >= 4 AND grounded >= 4 (i.e. explicit refusal, zero fabrication)"
       hard_fail_if: "asserts any specific claim about the absent topic as if sourced, OR invents a citation"
   overall_gate: "Suite PASSES when ALL 9 scenarios pass their per-type gate. Report per-scenario scores + held-out subset separately (the held-out pass rate is the real generalization signal)."
-
-# ---------------------------------------------------------------------------
-# A/B COMPARISON FRAME — `ask` (reads synthesized wiki) vs naive RAG baseline
-# (grep/read over the RAW source articles in ~/medium_articles). The proof that
-# the COMPILED wiki beats raw retrieval — Karpathy's actual claim.
-# ---------------------------------------------------------------------------
-ab_comparison:
-  systems:
-    A_wiki: "wiki-weaver ask — navigates runs/corpus/wiki (index.md -> pages -> [[wikilinks]])."
-    B_naive_rag: "Baseline (eval/rag_baseline.py style): lexical grep/keyword retrieval + read over RAW ~/medium_articles, then an LLM answers from the retrieved raw chunks. No synthesis layer."
-  protocol:
-    - "Run all 9 scenarios through BOTH systems."
-    - "Blind the systems (label 'System X' / 'System Y', randomized per scenario) so the judge can't tell which is the wiki."
-    - "A comparison agent judges answer QUALITY for each scenario on the same axes as the grader: groundedness, correctness vs ground_truth, citation/traceability, and (for absent) refusal-correctness. It picks A-wins / B-wins / tie per scenario with a one-line reason."
-  quality_judging:
-    judged_by: comparison_agent
-    per_scenario_verdict: [A_wins, B_wins, tie]
-    require_evidence: "Each verdict cites the specific fact(s) one system got and the other missed."
-  efficiency_measured_separately:
-    source: "context-intelligence events.jsonl for each run (NOT judged by the LLM — read deterministically from CI events)."
-    metrics:
-      cost_usd: "sum of llm:response.usage cost_usd across the run (per scenario and total)."
-      tokens: "input+output tokens from llm:response.usage."
-      latency_wall_ms: "wall time from first node start to final answer (pipeline:node_complete durations / run timestamps)."
-    note: "Per the objective hierarchy: retrieval optimizes for LATENCY first (a human is blocked), then cost. Quality is the gate; efficiency is compared only among quality-passing answers."
-  expected_shape:   # hypotheses to confirm/refute, NOT targets to hit
-    - "Cross-source (S1–S3): wiki WINS — the synthesized pages already weave + surface tensions; naive RAG retrieves raw chunks from separate articles and must re-derive (often missing the tension, e.g. reporting only one side of the MCP-vs-CLI numbers)."
-    - "Absent (A1–A3): wiki WINS or ties — the index makes 'not covered' verifiable; grep over raw articles risks surfacing tangential keyword hits (e.g. 'Cody'-adjacent assistants) and confabulating, especially on the adjacent-but-absent A3."
-    - "Single-page (L1–L3): roughly TIE on quality — the answer lives in one retrievable place either way; wiki likely cheaper/faster (one compiled page vs scanning many raw files)."
-    - "Efficiency: wiki lower latency on synthesis (no multi-file scan); naive RAG token/cost grows with how many raw articles must be read."

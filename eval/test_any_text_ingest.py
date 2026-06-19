@@ -24,7 +24,7 @@ from unittest.mock import patch
 _REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO))
 
-from cli.wiki_weaver import ARCHIVE, FAILED, INBOX, cmd_ingest  # noqa: E402
+from wiki_weaver.wiki_weaver import ARCHIVE, FAILED, INBOX, cmd_ingest  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -112,7 +112,7 @@ def test_a_non_md_text_files_are_ingested(tmp_path: Path) -> None:
         assert call_count[0] <= 5, "spin guard: too many run_inner calls"
         return _fake_result(True)
 
-    with patch("cli.engine_runner.run_inner", side_effect=mock_run):
+    with patch("wiki_weaver.engine_runner.run_inner", side_effect=mock_run):
         rc = cmd_ingest(_args(wiki))
 
     assert rc == 0, f"all text sources converged — exit code must be 0, got {rc}"
@@ -153,7 +153,7 @@ def test_b_binary_routes_to_failed_no_run_inner(tmp_path: Path) -> None:
 
     _seed_binary(inbox, "blob.png")
 
-    with patch("cli.engine_runner.run_inner") as mock_run:
+    with patch("wiki_weaver.engine_runner.run_inner") as mock_run:
         rc = cmd_ingest(_args(wiki))
 
     # run_inner must NOT be called for a binary source.
@@ -218,7 +218,7 @@ def test_c_mixed_inbox_md_rs_binary_ds_store(tmp_path: Path) -> None:
         ingested_names.append(src.name)
         return _fake_result(True)
 
-    with patch("cli.engine_runner.run_inner", side_effect=mock_run):
+    with patch("wiki_weaver.engine_runner.run_inner", side_effect=mock_run):
         rc = cmd_ingest(_args(wiki))
 
     # run_inner called exactly twice (a.md and b.rs, NOT evil.bin, NOT .DS_Store).

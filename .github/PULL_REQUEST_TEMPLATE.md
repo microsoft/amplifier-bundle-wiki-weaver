@@ -11,7 +11,7 @@
 <!-- How did you test this? Include specific commands run and their output. -->
 
 - [ ] `pytest eval/ -q` passes (deterministic tests — no LLM required)
-- [ ] Tested manual `python -m cli ingest` with a real wiki (if touching the pipeline)
+- [ ] Tested manual `python -m wiki_weaver ingest` with a real wiki (if touching the pipeline)
 - [ ] Added/updated tests for new behavior
 
 ## Notes for reviewers

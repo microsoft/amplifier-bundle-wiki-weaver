@@ -7,27 +7,27 @@ quality, remediation); code owns control, validation, archiving, and dedup.
 
 ## Demo it (any pile of articles → a wiki)
 
-`wiki-weaver` runs under an Amplifier Python interpreter. Invoke it as `python -m cli <command>`
+`wiki-weaver` runs under an Amplifier Python interpreter. Invoke it as `python -m wiki_weaver <command>`
 from the repo root.
 
 ```bash
 PY=/path/to/amplifier/bin/python3   # python3 from your Amplifier install
 cd wiki-weaver
 
-$PY -m cli doctor                   # env preflight (all green)
+$PY -m wiki_weaver doctor                   # env preflight (all green)
 
 # Create a wiki and design a domain-fit schema from your purpose (one LLM call).
-$PY -m cli init mywiki \
+$PY -m wiki_weaver init mywiki \
   --purpose "A research second-brain on distributed systems: answer 'which approach for X',
   compare trade-offs, and track how conclusions evolve as more sources arrive."
 
 cp ~/some_articles/*.md mywiki/_inbox/                  # drop in source material
-$PY -m cli ingest --wiki mywiki --max-cycles 5          # weave it in (one source at a time)
-$PY -m cli ask "what are the trade-offs of X vs Y?" --wiki mywiki   # query the compiled wiki
-$PY -m cli lint --wiki mywiki                           # structural validation -> PASS (exit 0)
+$PY -m wiki_weaver ingest --wiki mywiki --max-cycles 5          # weave it in (one source at a time)
+$PY -m wiki_weaver ask "what are the trade-offs of X vs Y?" --wiki mywiki   # query the compiled wiki
+$PY -m wiki_weaver lint --wiki mywiki                           # structural validation -> PASS (exit 0)
 ```
 
-Prefer a generic, no-LLM scaffold? Use `$PY -m cli init mywiki --plain` (free, instant) and
+Prefer a generic, no-LLM scaffold? Use `$PY -m wiki_weaver init mywiki --plain` (free, instant) and
 `ingest`/`ask`/`lint` the same way.
 
 Each source is ingested, structurally validated, quality-assessed, and — only when it

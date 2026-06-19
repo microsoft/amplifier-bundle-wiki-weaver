@@ -39,7 +39,7 @@ from pathlib import Path
 # --------------------------------------------------------------------------
 # Fixed scenario: the 3 Karpathy articles, ingested IN THIS ORDER.
 # --------------------------------------------------------------------------
-ARTICLES_DIR = Path.home() / "medium_articles"
+ARTICLES_DIR = Path.home() / "wiki_sources"
 SCENARIO_ARTICLES = [
     "Andrej_Karpathy_Killed_RAG._Or_Did_He_The_LLM_Wiki_Pattern.md",
     "Andrej_Karpathy_Stopped_Using_AI_to_Write_Code._Hes_Using_It_to_Build_a_Second_Brain_Instead.md",
@@ -85,7 +85,7 @@ def run_variant(args: argparse.Namespace) -> int:
 
     # 1. init fresh wiki
     init = subprocess.run(
-        [sys.executable, "-u", "-m", "cli", "init", str(wiki)],
+        [sys.executable, "-u", "-m", "wiki_weaver", "init", str(wiki)],
         cwd=str(repo),
         capture_output=True,
         text=True,
@@ -125,7 +125,7 @@ def run_variant(args: argparse.Namespace) -> int:
             sys.executable,
             "-u",
             "-m",
-            "cli",
+            "wiki_weaver",
             "ingest",
             "--wiki",
             str(wiki),

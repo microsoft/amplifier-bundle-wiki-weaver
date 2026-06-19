@@ -14,11 +14,11 @@ import json
 import sys
 from pathlib import Path
 
-# Insert the repo root so we can import cli.wiki_weaver without installing.
+# Insert the repo root so we can import wiki_weaver.wiki_weaver without installing.
 _REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO))
 
-from cli.wiki_weaver import (  # noqa: E402
+from wiki_weaver.wiki_weaver import (  # noqa: E402
     REGISTRY_NAME,
     _assign_source_id,
     _read_source_frontmatter,
@@ -28,12 +28,12 @@ from cli.wiki_weaver import (  # noqa: E402
 # Test fixtures (source article markdown content)
 # ---------------------------------------------------------------------------
 
-# Full frontmatter with all three provenance fields (mimics medium-tools output)
+# Full frontmatter with all three provenance fields
 _FM_FULL = """\
 ---
 title: "Sample Article About LLMs"
 author: "Jane Doe"
-source: "https://medium.com/sample-article-abc123"
+source: "https://example.com/sample-article-abc123"
 date: "2024-05-01"
 ---
 
@@ -105,7 +105,7 @@ class TestReadSourceFrontmatter:
         src.write_text(_FM_FULL, encoding="utf-8")
         result = _read_source_frontmatter(src)
         assert result["author"] == "Jane Doe"
-        assert result["url"] == "https://medium.com/sample-article-abc123"
+        assert result["url"] == "https://example.com/sample-article-abc123"
         assert result["date"] == "2024-05-01"
 
     def test_url_key_accepted(self, tmp_path):
@@ -179,13 +179,13 @@ class TestAssignSourceIdProvenance:
 
         assert is_new
         assert entry["author"] == "Jane Doe"
-        assert entry["url"] == "https://medium.com/sample-article-abc123"
+        assert entry["url"] == "https://example.com/sample-article-abc123"
         assert entry.get("date") == "2024-05-01"
         # Verify persisted to .sources.json
         data = json.loads((wiki / REGISTRY_NAME).read_text(encoding="utf-8"))
         saved = data["sources"][0]
         assert saved["author"] == "Jane Doe"
-        assert saved["url"] == "https://medium.com/sample-article-abc123"
+        assert saved["url"] == "https://example.com/sample-article-abc123"
         assert saved.get("date") == "2024-05-01"
 
     def test_no_frontmatter_no_crash(self, tmp_path):

@@ -33,7 +33,7 @@ import json
 import sys
 from pathlib import Path
 
-# Ensure the repo root is on sys.path so `from cli.* import` works when
+# Ensure the repo root is on sys.path so `from wiki_weaver.* import` works when
 # this script is invoked directly (e.g. via tool_command in ingest.dot).
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
@@ -79,7 +79,7 @@ def main() -> int:
     except OSError:
         pass
 
-    from cli.lib import _detect_and_undo_tamper
+    from wiki_weaver.lib import _detect_and_undo_tamper
 
     before: tuple[int, set[str]] = (ledger_lines, archive_files)
     violations = _detect_and_undo_tamper(wiki_dir, before)

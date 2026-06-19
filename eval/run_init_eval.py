@@ -349,7 +349,7 @@ async def _run_one(
 
         def _do_init() -> int:
             # Import inside thread to avoid asyncio context conflicts
-            from cli.engine_runner import run_init  # noqa: PLC0415
+            from wiki_weaver.engine_runner import run_init  # noqa: PLC0415
 
             return run_init(
                 wiki_dir,

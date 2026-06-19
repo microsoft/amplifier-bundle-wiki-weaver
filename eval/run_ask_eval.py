@@ -312,7 +312,7 @@ def _run_ask_subprocess(
     # Use the current Python interpreter (which has amplifier_foundation) with
     # PYTHONPATH set to REPO_ROOT so the cli package is importable.
     # This avoids the .venv/bin/wiki-weaver path which lacks amplifier_foundation.
-    cmd = [sys.executable, "-m", "cli", "ask", question, "--wiki", str(wiki), "--json"]
+    cmd = [sys.executable, -m", "wiki_weaver", "ask", question, "--wiki", str(wiki), "--json"]
     env = os.environ.copy()
     env["PYTHONPATH"] = str(REPO_ROOT)
     try:

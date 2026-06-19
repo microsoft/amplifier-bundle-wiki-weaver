@@ -29,7 +29,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-# Ensure the repo root is on sys.path so `from cli.* import` works when
+# Ensure the repo root is on sys.path so `from wiki_weaver.* import` works when
 # this script is invoked directly (e.g. via tool_command in ingest.dot).
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
@@ -99,7 +99,7 @@ def main() -> int:
         )
         return 1
 
-    from cli.lib import (
+    from wiki_weaver.lib import (
         ARCHIVE,
         _append_ledger,
         _collision_safe_move,

@@ -12,7 +12,7 @@ A clear and concise description of what the bug is.
 
 ## Steps to reproduce
 
-1. Command run: `python -m cli ...`
+1. Command run: `python -m wiki_weaver ...`
 2. Input / wiki state: (describe or attach)
 3. See error
 

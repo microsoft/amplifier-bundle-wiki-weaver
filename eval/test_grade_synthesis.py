@@ -1,10 +1,10 @@
 """Calibration tests for grade_synthesis against the known-bad baseline wiki.
 
-These tests pin the eval to the *concatenation baseline* (runs/medium/wiki,
+These tests pin the eval to the *concatenation baseline* (runs/known-bad/wiki,
 paused at 87 converged articles) so that a future synthesis fix cannot silently
 produce a passing score on the old output.
 
-Baseline facts (measured 2026-06-12, run paused at 87/748 articles):
+Baseline facts (measured 2026-06-12, run paused at 87 articles):
   total_source_labeled_sections : 60
       (spec estimated ~54; run grew from 65 → 87 articles between estimate and
       measurement, accounting for the ~11% difference)
@@ -20,7 +20,7 @@ NOTE on G0 / SynthesisScore = 0:
   no_duplicate_pages() was fixed (2026-06-12) to only flag slug-N.md when the
   matching base slug also exists — so version-named pages like deepseek-v3-2.md
   and year-named pages like ai-coding-trends-2026.md are no longer false positives.
-  G0 may still fail on the medium baseline due to ledger integrity (run paused
+  G0 may still fail on the known-bad baseline due to ledger integrity (run paused
   mid-stream), which zeros out the SynthesisScore structure-multiplier.
   The synthesis quality gates (G1, G2) still independently fail, which is the
   signal that matters.
@@ -43,7 +43,7 @@ sys.path.insert(0, str(_REPO / "pipeline"))
 from grade_wiki import grade_integration, grade_synthesis  # noqa: E402
 
 # The known-bad baseline wiki — skip if unavailable (CI without fixture corpus).
-_WIKI = _REPO / "runs" / "medium" / "wiki"
+_WIKI = _REPO / "runs" / "known-bad" / "wiki"
 pytestmark = pytest.mark.skipif(
     not _WIKI.is_dir(),
     reason=f"known-bad baseline wiki not found at {_WIKI}",

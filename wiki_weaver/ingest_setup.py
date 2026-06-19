@@ -35,7 +35,7 @@ from pathlib import Path
 
 # When executed as a standalone script (via tool_command in ingest.dot), Python
 # adds only the script's directory (wiki-weaver/cli/) to sys.path, not the repo
-# root.  Add the repo root explicitly so that `from cli.* import ...` works.
+# root.  Add the repo root explicitly so that `from wiki_weaver.* import ...` works.
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
@@ -75,14 +75,14 @@ def main() -> int:
 
     # Import the library functions and engine constants lazily so
     # init/lint/doctor do not pay the cost of loading them.
-    from cli.engine_runner import FOOTNOTES_PY, NORMALIZE_PY, VALIDATE_PY
-    from cli.lib import (
+    from wiki_weaver.engine_runner import FOOTNOTES_PY, NORMALIZE_PY, VALIDATE_PY
+    from wiki_weaver.lib import (
         _assign_source_id,
         _looks_like_text,
         _processed_sources,
         _snapshot_process_state,
     )
-    from cli.policy import load_policy
+    from wiki_weaver.policy import load_policy
 
     policy = load_policy(wiki_dir)
     processed = _processed_sources(wiki_dir)

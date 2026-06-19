@@ -82,7 +82,7 @@ These frozen states are the measuring sticks. Do not overwrite them — they are
 
 | Asset | Role |
 |---|---|
-| `runs/medium/wiki` (257p) | **Known-bad** concatenation baseline. The eval's calibration anchor — graders pin to its 60 source-siloed sections. |
+| `runs/known-bad/wiki` | **Known-bad** concatenation baseline. The eval's calibration anchor — graders pin to its 60 source-siloed sections. |
 | `runs/corpus/wiki` (FROZEN @144p) | Current pipeline output — the **"before"** for this plan's changes. |
 | `runs/proof-claudecode-v2` | **Overlap** proof cluster (Claude-Code topic) — fast iteration, high merge pressure. |
 | `runs/proof-rag-v2` | **Held-out** proof cluster (RAG topic) — anti-overfit check. |
@@ -119,8 +119,8 @@ These frozen states are the measuring sticks. Do not overwrite them — they are
 - **Phase E — scale proof.** Resume the full **748-article** corpus on the upgraded
   pipeline; grade *everything* against the frozen before-state (`runs/corpus/wiki`).
 
-**Item 6 (medium-tools acquisition front-end) is PARKED.** It may not belong in
-wiki-weaver at all — likely lives *inside* `medium-tools` as post-sync/download
+**Item 6 (acquisition front-end) is PARKED.** It may not belong in
+wiki-weaver at all — likely lives in a separate acquisition tool as post-sync/download
 processing that takes a dependency on this project. Revisit after Phase B.
 
 ---
@@ -166,7 +166,7 @@ pipeline; do **not** make anything depend on the CI *server* being up.
 ## A/B results (2026-06-13)
 
 Phase B closed with a rigorous A/B holding **synthesis as the only variable**: the *same*
-`ask` agent pointed at the synthesized wiki vs. at the raw `~/medium_articles` pile (748
+`ask` agent pointed at the synthesized wiki vs. at a raw source article directory (748
 files). 9 scenarios (3 single-page, 3 cross-source, 3 absent), blinded comparison agent,
 2-trial order-swap; cost/latency from real CI events on both sides.
 

@@ -13,7 +13,7 @@ Each user command is an attractor `.dot` pipeline in `pipeline/`, run via the CL
 - `lint` (`lint.dot`) — deterministic structural validation (no LLM).
 
 `doctor` (env diagnostics) and `query` (a naive substring-grep stub — not the query surface;
-use `ask`) round out the CLI. `rag` is an internal A/B eval baseline, not a user step.
+use `ask`) round out the CLI.
 
 ## Architecture
 
@@ -30,7 +30,7 @@ Commands are **thin lib wrappers over attractor `.dot` pipelines**:
 
 Runtime: requires the Amplifier runtime (`amplifier_foundation` + `unified_llm`); `pyproject`
 deps are intentionally empty — **not** a standalone `pip install`. Run under the Amplifier
-Python interpreter. `python -m cli doctor` verifies the runtime is importable.
+Python interpreter. `python -m wiki_weaver doctor` verifies the runtime is importable.
 
 ## Build / test
 

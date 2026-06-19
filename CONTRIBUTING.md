@@ -54,12 +54,12 @@ To run actual wiki ingest (requires Amplifier + an LLM provider API key):
 
 ```bash
 # Environment preflight
-python -m cli doctor
+python -m wiki_weaver doctor
 
 # Create a wiki and ingest a source
-python -m cli init   runs/my-wiki
+python -m wiki_weaver init   runs/my-wiki
 cp /path/to/article.md runs/my-wiki/_inbox/
-python -m cli ingest --wiki runs/my-wiki
+python -m wiki_weaver ingest --wiki runs/my-wiki
 ```
 
 See [DEMO.md](DEMO.md) for a full demo walkthrough and [docs/](docs/) for design docs.

@@ -24,13 +24,13 @@ from pathlib import Path
 
 import pytest
 
-# Insert repo root so we can import cli.* and pipeline.* without installing.
+# Insert repo root so we can import wiki_weaver.* and pipeline.* without installing.
 _REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO))
 sys.path.insert(0, str(_REPO / "pipeline"))
 
-from cli.policy import WikiPolicy, _DEF_MODEL, _DEF_PROVIDER, load_policy  # noqa: E402
-from cli.engine_runner import (  # noqa: E402
+from wiki_weaver.policy import WikiPolicy, _DEF_MODEL, _DEF_PROVIDER, load_policy  # noqa: E402
+from wiki_weaver.engine_runner import (  # noqa: E402
     CONVERGENCE_RUBRIC_PATH,
     FOOTNOTES_PY,
     INIT_DOT,
