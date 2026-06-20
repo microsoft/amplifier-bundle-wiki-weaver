@@ -20,11 +20,26 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pytest
 
 _REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO))
 
 from wiki_weaver.wiki_weaver import ARCHIVE, FAILED, INBOX, cmd_ingest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _bypass_env_gate(monkeypatch):
+    """Bypass the cmd_ingest env preflight so these tests exercise drain logic.
+
+    The env gate (amplifier_foundation import + ANTHROPIC_API_KEY) is covered by
+    eval/test_preflight_gate.py. These tests assume a working environment and
+    verify drain ORCHESTRATION (re-glob, archive/failed routing, dedup) with a
+    mocked run_inner, so they must run regardless of foundation/key presence in
+    a lightweight CI env. Patching preflight to return no failures is robust
+    whether or not foundation is installed or a key is set.
+    """
+    monkeypatch.setattr("wiki_weaver.wiki_weaver.preflight", lambda **_kw: [])
 
 
 # ---------------------------------------------------------------------------

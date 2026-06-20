@@ -10,14 +10,28 @@ SAFETY: pure in-process checks; no engine, no LLM, no real ingest.
 from __future__ import annotations
 
 import argparse
+import importlib.util
+import os
 import sys
 from pathlib import Path
+
+import pytest
 
 _REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO))
 
 from wiki_weaver.lib import preflight  # noqa: E402
 from wiki_weaver.wiki_weaver import cmd_ingest, cmd_query  # noqa: E402
+
+# The "env is clean -> preflight returns []" assertion only holds in a fully
+# provisioned dev environment. CI is deliberately lightweight (no Amplifier runtime,
+# no API key), so that case is skipped there; the real install + @main dependency
+# resolution is proven by the DTU install matrix instead.
+_FULLY_PROVISIONED = (
+    importlib.util.find_spec("amplifier_foundation") is not None
+    and importlib.util.find_spec("unified_llm") is not None
+    and bool(os.environ.get("ANTHROPIC_API_KEY"))
+)
 
 
 def test_preflight_flags_missing_key_only_when_required(monkeypatch) -> None:
@@ -40,6 +54,11 @@ def test_preflight_flags_missing_key_only_when_required(monkeypatch) -> None:
     )
 
 
+@pytest.mark.skipif(
+    not _FULLY_PROVISIONED,
+    reason="needs Amplifier runtime (foundation+unified_llm) + API key; "
+    "validated by the DTU install proof, not lightweight CI",
+)
 def test_preflight_clean_when_env_ok() -> None:
     """In this env (key + foundation + unified_llm + validator present) both
     modes return no failures."""
