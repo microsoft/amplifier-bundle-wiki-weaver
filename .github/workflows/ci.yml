@@ -18,13 +18,13 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        # PyYAML is a real runtime dependency of the policy loader
-        # (cli/policy.py reads <wiki>/wiki.config.yaml). Under the Amplifier
-        # Python it is always present; CI must install it too, otherwise the
-        # policy-override tests silently fall through to defaults and fail.
+        # wiki-weaver declares amplifier-foundation + amplifier-unified-llm-client as @main git deps.
+        # CI installs wiki-weaver itself so those deps (and pyyaml, pytest) come along.
+        # The preflight check in cmd_ingest requires amplifier_foundation + unified_llm to be importable;
+        # the deterministic tests mock run_inner so they don't need actual API keys, just the imports.
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pyyaml
+          pip install -e .
 
       - name: Run eval tests
         # The deterministic tests (policy, provenance, ingest-drain, any-text ingest)
