@@ -1,14 +1,17 @@
 """Unit tests for wiki_weaver.model_resolver.
 
-All tests are keyless and deterministic — they mock _fetch_anthropic_models so
-no real network calls are made.  Tests verify the resolver's:
+All tests are keyless and deterministic — they monkeypatch
+``wiki_weaver.model_resolver.resolve_latest_for`` (the upstream async function
+imported into the module's namespace) so no real network calls are made.
 
-  - family-token resolution (newest served model in the family)
-  - explicit-id pass-through (no network call)
-  - fail-loud on empty family match
-  - fail-loud for non-anthropic provider with a family token
-  - deterministic date tiebreak
-  - process-level cache (second call returns cached value)
+Tests verify the resolver's:
+
+  - family-token resolution (shim routes to upstream, returns its answer)
+  - explicit-id pass-through (no upstream call)
+  - fail-loud propagation (upstream errors propagate unchanged)
+  - fail-loud for non-anthropic provider with a family token (local guard)
+  - process-level cache (second call skips upstream entirely)
+  - case-insensitive family token matching
 """
 
 from __future__ import annotations
@@ -24,56 +27,13 @@ sys.path.insert(0, str(_REPO))
 
 from wiki_weaver.model_resolver import (  # noqa: E402
     _clear_cache,
-    _parse_created_at,
     resolve_model,
 )
 
+
 # ---------------------------------------------------------------------------
-# Helpers / fixtures
+# Fixtures
 # ---------------------------------------------------------------------------
-
-_MOCK_LIST = [
-    # Two sonnet models — different dates; the 2026 one should win.
-    {
-        "id": "claude-sonnet-4-2",
-        "created_at": "2024-03-15T00:00:00Z",
-        "display_name": "Claude Sonnet 4.2",
-    },
-    {
-        "id": "claude-sonnet-4-6",
-        "created_at": "2026-05-01T00:00:00Z",
-        "display_name": "Claude Sonnet 4.6",
-    },
-    # One opus model.
-    {
-        "id": "claude-opus-4-8",
-        "created_at": "2026-05-28T00:00:00Z",
-        "display_name": "Claude Opus 4.8",
-    },
-    # No haiku in this list — used to test the empty-family error.
-]
-
-_MOCK_LIST_WITH_HAIKU = _MOCK_LIST + [
-    {
-        "id": "claude-haiku-4-5",
-        "created_at": "2025-11-01T00:00:00Z",
-        "display_name": "Claude Haiku 4.5",
-    },
-]
-
-# Tiebreak list: two sonnet models with THE SAME release date.
-_MOCK_TIED = [
-    {
-        "id": "claude-sonnet-4-6",
-        "created_at": "2026-05-01T00:00:00Z",
-        "display_name": "Claude Sonnet 4.6",
-    },
-    {
-        "id": "claude-sonnet-4-7",
-        "created_at": "2026-05-01T00:00:00Z",
-        "display_name": "Claude Sonnet 4.7",
-    },
-]
 
 
 @pytest.fixture(autouse=True)
@@ -85,66 +45,54 @@ def clear_resolver_cache():
 
 
 # ---------------------------------------------------------------------------
-# _parse_created_at
-# ---------------------------------------------------------------------------
-
-
-class TestParseCreatedAt:
-    def test_full_iso8601_with_z(self):
-        from datetime import date
-
-        assert _parse_created_at("2026-05-28T00:00:00Z") == date(2026, 5, 28)
-
-    def test_iso8601_without_z(self):
-        from datetime import date
-
-        assert _parse_created_at("2024-03-15T00:00:00") == date(2024, 3, 15)
-
-    def test_date_only(self):
-        from datetime import date
-
-        assert _parse_created_at("2025-11-01") == date(2025, 11, 1)
-
-    def test_empty_string_returns_none(self):
-        assert _parse_created_at("") is None
-
-    def test_none_returns_none(self):
-        assert _parse_created_at(None) is None
-
-    def test_garbage_returns_none(self):
-        assert _parse_created_at("not-a-date") is None
-
-
-# ---------------------------------------------------------------------------
 # resolve_model — explicit id pass-through
 # ---------------------------------------------------------------------------
 
 
 class TestExplicitIdPassthrough:
-    """Explicit model ids are returned unchanged — no network call."""
+    """Explicit model ids are returned unchanged — no upstream call."""
 
     def test_explicit_id_returned_unchanged(self, monkeypatch):
-        # Patch _fetch to raise so we know it wasn't called.
+        """Explicit id bypasses resolve_latest_for entirely."""
+
+        async def _must_not_be_called(*a, **kw):
+            raise AssertionError(
+                "resolve_latest_for must not be called for explicit ids"
+            )
+
         monkeypatch.setattr(
-            "wiki_weaver.model_resolver._fetch_anthropic_models",
-            lambda *a, **kw: (_ for _ in ()).throw(AssertionError("must not fetch")),
+            "wiki_weaver.model_resolver.resolve_latest_for",
+            _must_not_be_called,
         )
         assert resolve_model("anthropic", "claude-sonnet-4-6") == "claude-sonnet-4-6"
 
     def test_explicit_id_with_non_anthropic_provider(self, monkeypatch):
+        """Explicit id for any provider bypasses upstream — no guard needed."""
+
+        async def _must_not_be_called(*a, **kw):
+            raise AssertionError(
+                "resolve_latest_for must not be called for explicit ids"
+            )
+
         monkeypatch.setattr(
-            "wiki_weaver.model_resolver._fetch_anthropic_models",
-            lambda *a, **kw: (_ for _ in ()).throw(AssertionError("must not fetch")),
+            "wiki_weaver.model_resolver.resolve_latest_for",
+            _must_not_be_called,
         )
         assert resolve_model("openai", "gpt-4o") == "gpt-4o"
 
     def test_hyphenated_id_not_a_family(self, monkeypatch):
+        """'claude-opus-4-8' contains 'opus' as a substring but is NOT a bare
+        family token — it must pass through unchanged."""
+
+        async def _must_not_be_called(*a, **kw):
+            raise AssertionError(
+                "resolve_latest_for must not be called for explicit ids"
+            )
+
         monkeypatch.setattr(
-            "wiki_weaver.model_resolver._fetch_anthropic_models",
-            lambda *a, **kw: (_ for _ in ()).throw(AssertionError("must not fetch")),
+            "wiki_weaver.model_resolver.resolve_latest_for",
+            _must_not_be_called,
         )
-        # "claude-opus-4-8" contains "opus" as a substring but is NOT a bare
-        # family token — it must pass through unchanged.
         assert resolve_model("anthropic", "claude-opus-4-8") == "claude-opus-4-8"
 
 
@@ -154,63 +102,90 @@ class TestExplicitIdPassthrough:
 
 
 class TestFamilyTokenResolution:
-    """Family tokens resolve to the newest served model in that family."""
+    """Family tokens delegate to resolve_latest_for and return its answer."""
 
-    def test_sonnet_returns_newest_sonnet(self, monkeypatch):
-        """'sonnet' → newest sonnet model by created_at, not the older one."""
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-        monkeypatch.setattr(
-            "wiki_weaver.model_resolver._fetch_anthropic_models",
-            lambda *a, **kw: _MOCK_LIST,
-        )
+    def test_sonnet_returns_upstreams_answer(self, monkeypatch):
+        """'sonnet' → whatever resolve_latest_for returns for '*sonnet*'."""
+
+        async def _stub(provider, pattern, *, stable_only=True):
+            assert provider == "anthropic"
+            assert pattern == "*sonnet*"
+            assert stable_only is True
+            return "claude-sonnet-4-6"
+
+        monkeypatch.setattr("wiki_weaver.model_resolver.resolve_latest_for", _stub)
         result = resolve_model("anthropic", "sonnet")
-        assert result == "claude-sonnet-4-6", (
-            f"Expected newest sonnet 'claude-sonnet-4-6' but got {result!r}. "
-            "Resolver may be using list order instead of release_date."
-        )
+        assert result == "claude-sonnet-4-6"
 
-    def test_opus_returns_correct_model(self, monkeypatch):
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-        monkeypatch.setattr(
-            "wiki_weaver.model_resolver._fetch_anthropic_models",
-            lambda *a, **kw: _MOCK_LIST,
-        )
+    def test_opus_returns_upstreams_answer(self, monkeypatch):
+        """'opus' → whatever resolve_latest_for returns for '*opus*'."""
+
+        async def _stub(provider, pattern, *, stable_only=True):
+            assert pattern == "*opus*"
+            return "claude-opus-4-8"
+
+        monkeypatch.setattr("wiki_weaver.model_resolver.resolve_latest_for", _stub)
         assert resolve_model("anthropic", "opus") == "claude-opus-4-8"
 
-    def test_haiku_returns_correct_model(self, monkeypatch):
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-        monkeypatch.setattr(
-            "wiki_weaver.model_resolver._fetch_anthropic_models",
-            lambda *a, **kw: _MOCK_LIST_WITH_HAIKU,
-        )
+    def test_haiku_returns_upstreams_answer(self, monkeypatch):
+        """'haiku' → whatever resolve_latest_for returns for '*haiku*'."""
+
+        async def _stub(provider, pattern, *, stable_only=True):
+            assert pattern == "*haiku*"
+            return "claude-haiku-4-5"
+
+        monkeypatch.setattr("wiki_weaver.model_resolver.resolve_latest_for", _stub)
         assert resolve_model("anthropic", "haiku") == "claude-haiku-4-5"
 
     def test_family_token_case_insensitive(self, monkeypatch):
         """'SONNET' (uppercase) should resolve the same as 'sonnet'."""
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-        monkeypatch.setattr(
-            "wiki_weaver.model_resolver._fetch_anthropic_models",
-            lambda *a, **kw: _MOCK_LIST,
-        )
+
+        async def _stub(provider, pattern, *, stable_only=True):
+            assert pattern == "*sonnet*"  # normalised to lowercase glob
+            return "claude-sonnet-4-6"
+
+        monkeypatch.setattr("wiki_weaver.model_resolver.resolve_latest_for", _stub)
         assert resolve_model("anthropic", "SONNET") == "claude-sonnet-4-6"
 
     def test_result_is_cached(self, monkeypatch):
-        """Second call for the same (provider, family) must not fetch again."""
+        """Second call for the same (provider, family) must not call upstream again."""
         call_count = [0]
 
-        def counting_fetch(*a, **kw):
+        async def _counting_stub(provider, pattern, *, stable_only=True):
             call_count[0] += 1
-            return _MOCK_LIST
+            return "claude-sonnet-4-6"
 
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
         monkeypatch.setattr(
-            "wiki_weaver.model_resolver._fetch_anthropic_models", counting_fetch
+            "wiki_weaver.model_resolver.resolve_latest_for", _counting_stub
         )
 
         resolve_model("anthropic", "sonnet")
         resolve_model("anthropic", "sonnet")
 
-        assert call_count[0] == 1, f"Expected 1 fetch call but got {call_count[0]}"
+        assert call_count[0] == 1, (
+            f"Expected 1 upstream call but got {call_count[0]}. Cache is not working."
+        )
+
+    def test_different_families_each_call_upstream_once(self, monkeypatch):
+        """Two different family tokens each get exactly one upstream call."""
+        calls: list[str] = []
+
+        async def _tracking_stub(provider, pattern, *, stable_only=True):
+            calls.append(pattern)
+            return f"resolved-{pattern.strip('*')}-model"
+
+        monkeypatch.setattr(
+            "wiki_weaver.model_resolver.resolve_latest_for", _tracking_stub
+        )
+
+        resolve_model("anthropic", "sonnet")
+        resolve_model("anthropic", "opus")
+        resolve_model("anthropic", "sonnet")  # cached — no call
+        resolve_model("anthropic", "opus")  # cached — no call
+
+        assert calls == ["*sonnet*", "*opus*"], (
+            f"Expected exactly ['*sonnet*', '*opus*'] but got {calls}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -221,78 +196,93 @@ class TestFamilyTokenResolution:
 class TestFailLoud:
     """Resolver raises clear errors rather than silently falling back."""
 
-    def test_empty_family_raises_value_error(self, monkeypatch):
-        """A family with zero matching models must raise ValueError (not return None)."""
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-        monkeypatch.setattr(
-            "wiki_weaver.model_resolver._fetch_anthropic_models",
-            lambda *a, **kw: _MOCK_LIST,  # No haiku in _MOCK_LIST
-        )
+    def test_empty_family_raises_value_error_from_upstream(self, monkeypatch):
+        """When upstream raises ValueError (no match), the shim propagates it."""
+
+        async def _no_match(provider, pattern, *, stable_only=True):
+            raise ValueError(f"No stable model matching {pattern!r} for {provider!r}")
+
+        monkeypatch.setattr("wiki_weaver.model_resolver.resolve_latest_for", _no_match)
         with pytest.raises(ValueError, match="haiku"):
             resolve_model("anthropic", "haiku")
 
     def test_non_anthropic_provider_with_family_raises(self):
-        """Family tokens for non-anthropic providers must raise ValueError immediately."""
+        """Family tokens for non-anthropic providers raise ValueError immediately
+        (local guard — no upstream call needed)."""
         with pytest.raises(ValueError, match="anthropic"):
             resolve_model("openai", "sonnet")
 
-    def test_missing_api_key_raises_runtime_error(self, monkeypatch):
-        """Missing ANTHROPIC_API_KEY must raise RuntimeError before any network call."""
-        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-        with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
+    def test_network_failure_raises_runtime_error_from_upstream(self, monkeypatch):
+        """When upstream raises RuntimeError (e.g. auth or network failure),
+        the shim propagates it unchanged."""
+
+        async def _auth_failure(provider, pattern, *, stable_only=True):
+            raise RuntimeError(f"Failed to list models for {provider!r}: auth error")
+
+        monkeypatch.setattr(
+            "wiki_weaver.model_resolver.resolve_latest_for", _auth_failure
+        )
+        with pytest.raises(RuntimeError):
             resolve_model("anthropic", "sonnet")
 
+    def test_upstream_error_propagates_type_unchanged(self, monkeypatch):
+        """Whatever exception type upstream raises must propagate unchanged
+        (no swallowing, no wrapping into a different type)."""
+
+        class _CustomUpstreamError(Exception):
+            pass
+
+        async def _custom_raise(provider, pattern, *, stable_only=True):
+            raise _CustomUpstreamError("something unusual from upstream")
+
+        monkeypatch.setattr(
+            "wiki_weaver.model_resolver.resolve_latest_for", _custom_raise
+        )
+        with pytest.raises(_CustomUpstreamError):
+            resolve_model("anthropic", "opus")
+
 
 # ---------------------------------------------------------------------------
-# resolve_model — deterministic tiebreak
+# resolve_model — glob mapping
 # ---------------------------------------------------------------------------
 
 
-class TestTiebreak:
-    """When two models share the same created_at date, tiebreak by id descending."""
+class TestGlobMapping:
+    """The shim maps each family token to the correct glob before calling upstream."""
 
-    def test_tiebreak_deterministic(self, monkeypatch):
-        """Two models with the same date → the lexicographically LARGER id wins."""
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-        monkeypatch.setattr(
-            "wiki_weaver.model_resolver._fetch_anthropic_models",
-            lambda *a, **kw: _MOCK_TIED,
-        )
-        result = resolve_model("anthropic", "sonnet")
-        # "claude-sonnet-4-7" > "claude-sonnet-4-6" lexicographically
-        assert result == "claude-sonnet-4-7", (
-            f"Expected 'claude-sonnet-4-7' (larger id) for tiebreak, got {result!r}"
+    @pytest.mark.parametrize(
+        "family,expected_glob",
+        [
+            ("opus", "*opus*"),
+            ("sonnet", "*sonnet*"),
+            ("haiku", "*haiku*"),
+            ("OPUS", "*opus*"),  # case-normalised before glob lookup
+            ("Haiku", "*haiku*"),
+        ],
+    )
+    def test_correct_glob_passed_to_upstream(self, monkeypatch, family, expected_glob):
+        """Each family token maps to the right '*token*' glob."""
+        received: list[str] = []
+
+        async def _capture(provider, pattern, *, stable_only=True):
+            received.append(pattern)
+            return "some-model-id"
+
+        monkeypatch.setattr("wiki_weaver.model_resolver.resolve_latest_for", _capture)
+        resolve_model("anthropic", family)
+        assert received == [expected_glob], (
+            f"Family {family!r} should send glob {expected_glob!r}, got {received}"
         )
 
-    def test_tiebreak_is_stable(self, monkeypatch):
-        """Running the same resolve twice with the same list returns the same id."""
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-        monkeypatch.setattr(
-            "wiki_weaver.model_resolver._fetch_anthropic_models",
-            lambda *a, **kw: _MOCK_TIED,
-        )
-        first = resolve_model("anthropic", "sonnet")
-        _clear_cache()
-        second = resolve_model("anthropic", "sonnet")
-        assert first == second
+    @pytest.mark.parametrize("family", ["opus", "sonnet", "haiku"])
+    def test_stable_only_always_true(self, monkeypatch, family):
+        """The shim always passes stable_only=True to the upstream resolver."""
+        received: list[bool] = []
 
-    def test_missing_date_sorts_last(self, monkeypatch):
-        """A model with no created_at date should lose to any model that has a date."""
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-        dateless = [
-            {
-                "id": "claude-sonnet-nodatex",
-                "created_at": "",
-                "display_name": "Claude Sonnet nodate",
-            },
-            {
-                "id": "claude-sonnet-4-6",
-                "created_at": "2026-05-01T00:00:00Z",
-                "display_name": "Claude Sonnet 4.6",
-            },
-        ]
-        monkeypatch.setattr(
-            "wiki_weaver.model_resolver._fetch_anthropic_models",
-            lambda *a, **kw: dateless,
-        )
-        assert resolve_model("anthropic", "sonnet") == "claude-sonnet-4-6"
+        async def _capture(provider, pattern, *, stable_only=True):
+            received.append(stable_only)
+            return "some-model-id"
+
+        monkeypatch.setattr("wiki_weaver.model_resolver.resolve_latest_for", _capture)
+        resolve_model("anthropic", family)
+        assert received == [True], f"stable_only must be True, got {received}"

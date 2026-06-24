@@ -37,3 +37,9 @@ packages = ["wiki_weaver"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "pipeline" = "wiki_weaver_pipeline"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]
