@@ -13,7 +13,7 @@ Make `wiki-weaver` usable by someone who has **not** installed or set up `amplif
 **Target experience:** a clean machine + one API key + `uv tool install git+…` → it just works.
 
 ```console
-$ uv tool install git+https://github.com/microsoft/amplifier-bundle-wiki-weaver
+$ uv tool install git+https://github.com/microsoft/amplifier-app-wiki-weaver
 $ export ANTHROPIC_API_KEY=sk-ant-...
 $ wiki-weaver ingest --wiki my-wiki ./docs   # self-bootstraps end-to-end
 ```
@@ -28,7 +28,7 @@ The council settled this as **intent (i): "lower install friction."** A competin
 
 The system splits along the classic Amplifier seam: a **bundle is configuration**; daemons, HTTP servers, web UIs, auth, and process lifecycle are **application** concerns.
 
-| | `amplifier-bundle-wiki-weaver` | `amplifier-app-wiki-weaver` (future) |
+| | the `wiki-weaver` **bundle** (capability) | `amplifier-app-wiki-weaver` (this repo, the product) |
 |---|---|---|
 | **Role** | The reusable **capability** | The **product / delivery vehicle** |
 | **Owns** | DOT pipelines, ingest/query/lint/ask logic, `AmplifierSession` wiring, the CLI (incl. `doctor`) | Watch-daemon, web UI, LAN service API, service install, config/state lifecycle |
@@ -176,7 +176,7 @@ This is the **deliberate opposite** of the `amplifier-app-cli` approach along th
 ### 7.1 First install — works out of the box with one key
 
 ```console
-$ uv tool install git+https://github.com/microsoft/amplifier-bundle-wiki-weaver
+$ uv tool install git+https://github.com/microsoft/amplifier-app-wiki-weaver
   Installed wiki-weaver 0.3.0
   (engine resolved at install from @main — loop-pipeline, provider-anthropic, tools — cached per-venv)
 

@@ -975,7 +975,7 @@ def _hard_env_checks(*, require_api_key: bool) -> list[_EnvCheck]:
                     ),
                     remediation=(
                         "  fix: uv tool install --force"
-                        " git+https://github.com/microsoft/amplifier-bundle-wiki-weaver",
+                        " git+https://github.com/microsoft/amplifier-app-wiki-weaver",
                     ),
                 )
             )
@@ -1326,7 +1326,7 @@ def _update_real(update_l1_fn, update_l2_fn) -> int:  # type: ignore[no-untyped-
                 f"uv is serving a stale cache.  Manual fix:\n"
                 f"    uv cache prune && "
                 f"uv tool install --reinstall "
-                f"git+https://github.com/microsoft/amplifier-bundle-wiki-weaver"
+                f"git+https://github.com/microsoft/amplifier-app-wiki-weaver"
             )
             overall_ok = False
         elif not res.success and res.errors:

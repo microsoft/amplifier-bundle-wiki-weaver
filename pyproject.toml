@@ -23,7 +23,7 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/microsoft/amplifier-bundle-wiki-weaver"
+Repository = "https://github.com/microsoft/amplifier-app-wiki-weaver"
 
 [project.scripts]
 wiki-weaver = "wiki_weaver.cli:main"

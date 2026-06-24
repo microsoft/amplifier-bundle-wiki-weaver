@@ -221,7 +221,7 @@ Defaults above are fine; do not block Phase D on the redline.)
 
 ## 5.5 Model selection — live family resolution (SHIPPED)
 
-> **Status: SHIPPED** to `microsoft/amplifier-bundle-wiki-weaver` (originally PR #4; the resolver
+> **Status: SHIPPED** to `microsoft/amplifier-app-wiki-weaver` (originally PR #4; the resolver
 > engine now delegates to the upstream cross-provider resolver via PR #6, which consumes
 > `amplifier-bundle-attractor` PR #68 — see "Cross-provider family resolution" below). This section
 > is the authoritative model-selection stance and **supersedes** the pinned `claude-sonnet-4-6` /

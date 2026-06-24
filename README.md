@@ -35,7 +35,7 @@ Install the `wiki-weaver` command with one line (requires an [Amplifier](https:/
 installation — see [Requirements](#requirements)):
 
 ```bash
-uv tool install git+https://github.com/microsoft/amplifier-bundle-wiki-weaver
+uv tool install git+https://github.com/microsoft/amplifier-app-wiki-weaver
 ```
 
 `wiki-weaver` is a **companion** to an installed Amplifier: it tracks `@main` of the Amplifier

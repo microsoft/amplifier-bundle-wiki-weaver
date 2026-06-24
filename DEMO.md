@@ -7,7 +7,7 @@ quality, remediation); code owns control, validation, archiving, and dedup.
 
 ## Demo it (any pile of articles → a wiki)
 
-Install the `wiki-weaver` command with `uv tool install git+https://github.com/microsoft/amplifier-bundle-wiki-weaver`
+Install the `wiki-weaver` command with `uv tool install git+https://github.com/microsoft/amplifier-app-wiki-weaver`
 (requires an installed Amplifier — see the README). Installed users invoke it directly as
 `wiki-weaver <command>`; from a clone, use `python -m wiki_weaver <command>` under your Amplifier
 Python interpreter.

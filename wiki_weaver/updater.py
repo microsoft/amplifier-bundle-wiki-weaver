@@ -34,7 +34,7 @@ from typing import Optional
 # ---------------------------------------------------------------------------
 
 # The uv-tool install URL for wiki-weaver itself.
-INSTALL_URL = "git+https://github.com/microsoft/amplifier-bundle-wiki-weaver"
+INSTALL_URL = "git+https://github.com/microsoft/amplifier-app-wiki-weaver"
 
 # Layer-2 @main git sources managed by foundation's GitSourceHandler.
 # The cache key is per-repo (ignores #subdirectory), so root-repo URIs are used.

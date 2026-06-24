@@ -9,7 +9,7 @@ bundle:
 # source: is relative to THIS FILE's directory (behaviors/).
 # ../modules/tool-wiki-weaver resolves to <repo-root>/modules/tool-wiki-weaver.
 # Post-publish form (documented, not active):
-#   source: git+https://github.com/microsoft/amplifier-bundle-wiki-weaver@main#subdirectory=modules/tool-wiki-weaver
+#   source: git+https://github.com/microsoft/amplifier-app-wiki-weaver@main#subdirectory=modules/tool-wiki-weaver
 tools:
   - module: tool-wiki-weaver
     source: ../modules/tool-wiki-weaver
