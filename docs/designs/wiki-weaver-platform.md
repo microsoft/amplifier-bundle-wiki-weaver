@@ -6,7 +6,7 @@
 
 ---
 
-## 1. Goal / Intent (pinned)
+## 1. Goal / Intent (settled)
 
 Make `wiki-weaver` usable by someone who has **not** installed or set up `amplifier-app-cli`.
 
@@ -20,7 +20,7 @@ $ wiki-weaver ingest --wiki my-wiki ./docs   # self-bootstraps end-to-end
 
 **AmplifierSession and the Amplifier ecosystem stay under the hood.** This is explicitly **not** about removing the Amplifier engine — the attractor engine, `AmplifierSession`, `load_bundle`, and the DOT pipelines remain the machinery. The only thing being removed is the dependency on a *separately-installed* `amplifier-app-cli`.
 
-The council pinned this as **intent (i): "lower install friction."** A competing framing — **"no Amplifier lineage,"** i.e. forking the engine out into a standalone runner — was **rejected** as a means masquerading as the goal. The user wants the ecosystem under the hood; lineage stays.
+The council settled this as **intent (i): "lower install friction."** A competing framing — **"no Amplifier lineage,"** i.e. forking the engine out into a standalone runner — was **rejected** as a means masquerading as the goal. The user wants the ecosystem under the hood; lineage stays.
 
 ---
 
@@ -58,15 +58,15 @@ This is **unproven and load-bearing**: every prior DTU this session pre-seeded t
 
 ### Phase 1 — Harden the seams + provider registry (the active build)
 
-1. **PIN the engine.** Pin the attractor engine bundle, its modules, and the context-intelligence hook to known-good commits. This kills `@main` drift and the known `unified_llm` → `llm` import-name skew. **(PLANNED — Phase 1 work; see the two-axes note below.)**
+1. **TRACK `@main` for the engine.** Track the latest `@main` of the attractor engine bundle, its modules, and the context-intelligence hook — staying in lockstep with the installed Amplifier ecosystem. There is **no** commit-SHA pinning. When an upstream `@main` change breaks something (e.g. the known `unified_llm` → `llm` import-name skew), we **fix forward**. **(PLANNED — Phase 1 work; see the two-axes note below.)**
 2. **LIFT provider/model selection out of the DOTs** into wiki-weaver config. **Model-id selection is now SHIPPED as live family resolution** (attractor PR #68 + wiki-weaver PR #6): family tokens (`sonnet`/`opus`/`haiku`) resolve at runtime to the **newest stable model the provider actually serves** via the upstream `unified_llm` resolver — there is **no model-id to pin or maintain**, and the listing adapter is the generating adapter so a resolved id can't 404. *Provider* selection still substitutes into the DOTs. **Substitution into `synthesize.dot` is DONE on both paths.** `build_dot` substitutes per-node on the CLI path, and `run_ingest` (the tool-module drain path) now materializes a model-substituted `synthesize.dot` into `logs_dir` via the shared `_substitute_models` helper rather than reading the package original — so the drain path resolves per-stage too. Verified live: `WIKI_WEAVER_MODEL=opus` → ingest/assess nodes `claude-opus-4-8`, feedback node `claude-haiku-4-5-…` (its per-stage default), zero residual `claude-sonnet-4-6`.
 3. **The provider system** — see [Section 4](#4-provider-system-phase-1-core--council-approved-with-the-required-seam-fix). **(PLANNED — Phase 1 work.)**
 
 > **Two independent version concerns — do not conflate them.** wiki-weaver has two separate "what version?" axes:
 > - **(a) Model-id selection** — *which LLM we call within a family* — is **live family resolution, SHIPPED** (attractor PR #68 `150de03` + wiki-weaver PR #6 `5acd7de`). Family tokens resolve at runtime to the newest stable served model; explicit ids pass through unchanged. No pinning, no static catalog. Pre-1.0 the wiki-weaver layer is anthropic-only-guarded; the upstream resolver already supports anthropic/openai/gemini.
-> - **(b) Engine / dependency versions** — *which engine code we run* — stay **pinned and moved atomically** via `uv tool upgrade` (the "Resolution C" strategy below). This is **PLANNED (Phase 1)** and is the subject of §3 item 1, §4, and §4.6.
+> - **(b) Engine / dependency versions** — *which engine code we run* — **track `@main`** and update via reinstall / `uv tool upgrade`. There is **no** commit-SHA pinning; wiki-weaver stays in lockstep with the installed Amplifier ecosystem and **fixes forward** when an upstream `@main` change breaks something. This is **PLANNED (Phase 1)** and is the subject of §3 item 1, §4, and §4.6.
 >
-> One axis asks "which model do we call" (live, zero-pin); the other asks "which engine code do we run" (pinned, deliberate upgrades). Everything about engine/provider *pinning* in this doc is axis (b) and remains planned; only the *model-id* narrative has flipped to live resolution.
+> One axis asks "which model do we call" (live family resolution); the other asks "which engine code do we run" (latest `@main`, fix-forward). Both axes are zero-pin: the *model-id* narrative resolves live, and the *engine/dependency* narrative tracks `@main`.
 
 ### Phase 2 — App shell + watch-dir daemon (parked)
 
@@ -88,14 +88,14 @@ Supported providers (existing `amplifier-module-provider-*` packages):
 - `chat-completions`
 - `github-copilot`
 
-### 4.1 Providers are pinned extras, not floating `--with`
+### 4.1 Providers are first-class extras, not floating `--with`
 
-Providers are **pinned packages in the uv-tool venv, installed as pinned extras** (`wiki-weaver[openai]`), **not** via `uv tool --with`.
+Providers are **first-class optional-dependency extras of the tool** (`wiki-weaver[openai]`), installed into the uv-tool venv, **not** side-loaded via `uv tool --with`.
 
-- Extras **resolve together as one coherent atomic set** — the whole environment moves to a consistent state.
-- `--with` invites **independent drift** between the CLI, the engine, and the provider — the exact failure class this design exists to prevent.
+- Extras are part of the tool's own environment, so they live and update **with** the CLI and engine — one environment, resolved together.
+- `--with` side-loads packages *outside* the tool's declared dependency set, which is harder to discover, configure, and reason about.
 
-The UX command `wiki-weaver provider install openai` wraps the extras upgrade.
+Extras track `@main` like everything else. The UX command `wiki-weaver provider install openai` wraps the extras install.
 
 ### 4.2 Discovery is read-only
 
@@ -130,22 +130,22 @@ env vars  ›  namespaced [providers.<name>] blocks in ~/.config/wiki-weaver/con
 
 ### 4.6 Updates
 
-- `uv tool upgrade wiki-weaver` moves the **whole environment atomically** — CLI + provider extras + engine modules, all pinned, together. **Never piecemeal.**
-- Providers are pinned to **compatible version ranges, never `@main`**.
-- `doctor` reports a **single coherent version per provider** plus the **pinned engine-bundle commit**.
-- Optional `wiki-weaver self update` wraps the upgrade + post-upgrade verification.
+- `uv tool install --reinstall wiki-weaver` (or `uv tool upgrade wiki-weaver`) re-fetches the latest `@main` for the **whole environment** — CLI + provider extras + engine libs, together.
+- Providers track `@main` like everything else, staying in lockstep with the installed ecosystem; breakage is **fixed forward**.
+- `doctor` reports the **resolved `@main` commit** each provider and the engine bundle are running.
+- Optional `wiki-weaver self update` wraps the reinstall + post-update verification.
 
 ---
 
 ## 5. The critical fix — engine self-install seam (council FAIL → resolved)
 
-The anti-disaster claim rests on *"everything is a pinned package in the venv."* But the attractor engine's `prepare(install_deps=True)` **currently pip-installs the engine's own modules into the venv at runtime on first run**. That is a **second source of truth** for provider versions — it breaks under concurrency and offline, and can silently override the extras pin. The council ruled this a **FAIL**: a "one-time" runtime mutation is still the runtime mutation the goal forbids.
+The isolation claim rests on *"the venv is complete before first run."* But the attractor engine's `prepare(install_deps=True)` **currently pip-installs the engine's own modules into the venv at runtime on first run**. That is a hidden, on-the-hot-path mutation — it breaks under concurrency and offline, and makes the running environment depend on what happens to be reachable at first-run time. The council ruled this a **FAIL**: a "one-time" runtime mutation is still the runtime mutation the goal forbids.
 
 **Required resolution (hard requirement, not optional):**
 
-1. **Bake the engine's modules in at install time.** Resolve and pin `loop-pipeline`, the provider modules, and tools into the venv as part of install / extras, so the venv is **complete before first run**.
+1. **Warm the `@main` cache explicitly at install time.** Resolve `loop-pipeline`, the provider modules, and tools into the venv as part of install / extras, so the venv is **complete before first run** — fetched from the latest `@main`, not lazily on the hot path.
 2. **Make `prepare(install_deps=True)` a verify-only, fail-loud no-op.** Assert presence of every required module; if anything is missing, **fail loud** (`run wiki-weaver self update`) — **never** silently pip at runtime.
-3. **Assert version coherence** between the extras-installed provider and any engine-declared provider requirement. **Fail loud on skew.** One source of truth per provider version.
+3. **Verify the required modules are present and importable** before the hot path runs. **Fail loud** if a required module is missing or its import name has skewed (e.g. `unified_llm` → `llm`); **fix forward** rather than papering over it at runtime.
 
 ---
 
@@ -153,16 +153,21 @@ The anti-disaster claim rests on *"everything is a pinned package in the venv."*
 
 State it plainly, because it is the load-bearing invariant:
 
-> Everything wiki-weaver runs on is a **pinned package** in an **isolated, per-install uv-tool venv**. Discovery is **read-only** (entry points). Updates are **explicit and atomic** via `uv tool upgrade` — the whole environment moves together to a known state.
+> Everything wiki-weaver runs on lives in an **isolated, per-install uv-tool venv** that **tracks the latest `@main`** of the engine bundle, its modules, and `amplifier-foundation` — staying in lockstep with the installed Amplifier ecosystem. Discovery is **read-only** (entry points). Updates re-fetch `@main` for the whole environment via reinstall; when an upstream `@main` change breaks something, we **fix forward**.
+
+The isolation invariant — what actually keeps a wiki-weaver install from being corrupted out from under itself — is the **per-install venv**, *not* version pinning. wiki-weaver embraces `@main`; what it refuses is a *shared, mutable, editable* runtime.
 
 Explicitly **NOT** allowed:
 
-- ❌ No mutable `~/.amplifier/cache` for code
+- ❌ No mutable `~/.amplifier/cache` for code (wiki-weaver gets its **own** venv)
 - ❌ No editable installs
-- ❌ No `@main` floating refs
-- ❌ No runtime module mutation
+- ❌ No runtime module mutation (no mid-run pip)
 
-This is the **deliberate opposite** of the `amplifier-app-cli` approach (mutable shared cache + editable installs + `@main`) — the approach this team **observed corrupt a running process this session** (a mid-run cache re-clone that broke a live eval).
+Explicitly **embraced** (deliberately, not by accident):
+
+- ✅ `@main` refs — wiki-weaver intends to track latest `@main` and fix forward
+
+This is the **deliberate opposite** of the `amplifier-app-cli` approach along the axis that actually bit us: a **mutable shared cache + editable installs**, which this team **observed corrupt a running process this session** (a mid-run cache re-clone that broke a live eval). The fix is the **isolated per-install venv** — not abandoning `@main`.
 
 ---
 
@@ -173,13 +178,13 @@ This is the **deliberate opposite** of the `amplifier-app-cli` approach (mutable
 ```console
 $ uv tool install git+https://github.com/microsoft/amplifier-bundle-wiki-weaver
   Installed wiki-weaver 0.3.0
-  (engine baked in at install — loop-pipeline, provider-anthropic, tools — all pinned)
+  (engine resolved at install from @main — loop-pipeline, provider-anthropic, tools — cached per-venv)
 
 $ export ANTHROPIC_API_KEY=sk-ant-...
 
 $ wiki-weaver doctor
   wiki-weaver 0.3.0
-  engine bundle  : amplifier-bundle-attractor @ ead099b (pinned)        ✓
+  engine bundle  : amplifier-bundle-attractor @ ead099b (tracking main) ✓
   providers      : anthropic 1.4.2  (default, active)                   ✓
   active model   : claude-sonnet-4-6
   ANTHROPIC_API_KEY .................................................. set ✓
@@ -193,7 +198,7 @@ $ wiki-weaver ask   --wiki my-wiki "How does refund settlement work?"
 
 The default (`anthropic`) strands no one: `uv tool install` + a key → working wiki.
 
-### 7.2 Adding a provider — pinned, atomic, no runtime surprises
+### 7.2 Adding a provider — a first-class extra, no runtime surprises
 
 ```console
 $ wiki-weaver provider list
@@ -204,13 +209,13 @@ $ wiki-weaver provider list
   → wiki-weaver provider install <name>
 
 $ wiki-weaver provider install openai
-  Upgrading the wiki-weaver environment with [openai]…
-    + amplifier-module-provider-openai 2.1.0  (pinned)
-  Verifying environment… engine present ✓  version coherence ✓
+  Installing the [openai] extra into the wiki-weaver environment…
+    + amplifier-module-provider-openai @ main
+  Verifying environment… engine present ✓  module importable ✓
   ✅ 'openai' installed.  Configure: wiki-weaver provider config openai
 ```
 
-Under the hood this is a pinned-extras upgrade of the whole environment — not a `--with` side-load.
+Under the hood this is a first-class-extra install into the tool's own environment — not a `--with` side-load.
 
 ### 7.3 Per-provider config — env + config.toml + secrets.toml (0600)
 
@@ -278,24 +283,24 @@ $ wiki-weaver provider login github-copilot
 $ wiki-weaver ask --provider github-copilot --wiki my-wiki "Where is settlement retried?"
 ```
 
-### 7.6 Upgrading — the whole env moves atomically
+### 7.6 Upgrading — the whole env re-fetches `@main` together
 
 ```console
-$ uv tool upgrade wiki-weaver
-  Upgrading wiki-weaver 0.3.0 → 0.4.0
+$ uv tool install --reinstall wiki-weaver     # (or: uv tool upgrade wiki-weaver)
+  Reinstalling wiki-weaver 0.3.0 → 0.4.0
     + wiki-weaver 0.4.0
-    + amplifier-module-provider-anthropic 1.5.0  (pinned)
-    + amplifier-module-provider-openai     2.2.0  (pinned)
-    + engine bundle amplifier-bundle-attractor @ 7c41f02 (pinned)
-  Whole environment moved together.
+    + amplifier-module-provider-anthropic @ main
+    + amplifier-module-provider-openai     @ main
+    + engine bundle amplifier-bundle-attractor @ main
+  Whole environment re-fetched from @main together.
 
 $ wiki-weaver doctor
-  engine bundle : amplifier-bundle-attractor @ 7c41f02 (pinned)        ✓
-  providers     : anthropic 1.5.0 ✓   openai 2.2.0 ✓   (coherent)      ✓
+  engine bundle : amplifier-bundle-attractor @ 7c41f02 (tracking main) ✓
+  providers     : anthropic @ a1b2c3d ✓   openai @ e4f5g6h ✓           ✓
   ✅ Ready.
 ```
 
-No provider is upgraded piecemeal; `doctor` confirms a single coherent version per provider and the pinned engine-bundle commit.
+The whole environment re-fetches `@main` together; `doctor` reports the resolved `@main` commit each provider and the engine bundle are running.
 
 ---
 
@@ -304,7 +309,7 @@ No provider is upgraded piecemeal; `doctor` confirms a single coherent version p
 These are Restless-Old-Brian's gates: the design is **not done until proven end-to-end as a user would experience it.**
 
 - **Phase 0 gate — bare-DTU bootstrap proof.** On a genuinely bare DTU (no host Amplifier venv, no `~/.amplifier`), `uv tool install git+…wiki-weaver` + one API key + `wiki ingest` self-bootstraps `AmplifierSession` end-to-end. (See [Section 3](#phase-0--prove-the-bootstrap-acceptance-gate-not-yet-done).)
-- **Phase 1 provider gate.** A real `wiki-weaver provider install <non-default>`, one wiki build run **end-to-end through that provider**, and `doctor` showing a **single coherent version per provider** plus the **pinned engine-bundle commit**.
+- **Phase 1 provider gate.** A real `wiki-weaver provider install <non-default>`, one wiki build run **end-to-end through that provider**, and `doctor` reporting the **resolved `@main` commit** each provider and the engine bundle are running.
 
 **Standing evidence this is unproven today:** the session's `qwen_swap.py` hack had to hand-edit bundle agent YAML *and* patch DOT model ids to switch models — exactly the manual surgery the provider system exists to eliminate. Until the gates above pass, the provider system is a design, not a fact.
 
@@ -314,7 +319,7 @@ These are Restless-Old-Brian's gates: the design is **not done until proven end-
 
 | # | Alternative | Disposition | Reason |
 |---|---|---|---|
-| **B** | Vendor the entire engine into the wheel | **Parked** — defensible later | The right move for *true offline*, but pinning already buys reproducibility without the wheel-bloat and sync tax. Revisit when offline is a hard requirement. |
+| **B** | Vendor the entire engine into the wheel | **Parked** — defensible later | The right move for *true offline*, but it carries wheel-bloat and a sync tax, and trades away the lockstep-with-`@main` posture this design wants. Revisit when offline is a hard requirement. |
 | **C** | Replace the engine with a standalone DOT runner (drop `amplifier_foundation`) | **Rejected** | A vanity cost: reimplements engine machinery the seam already isolates, forfeits shared-engine gains, and the user explicitly wants `AmplifierSession` under the hood. |
 | **D** | Publish the Amplifier deps to PyPI for `pip install` | **Parked** — right vehicle for wider distribution | This is intent (iii) and the correct path for broad distribution, but it's an **upstream ecosystem commitment** wiki-weaver can't make alone. Don't block clean-machine usability on it. |
 
