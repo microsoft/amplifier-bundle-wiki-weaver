@@ -9,6 +9,7 @@ Subcommands:
     ingest [--wiki] [--source] integrate inbox sources via the engine
     lint   [--wiki]            run the structural validator
     doctor                     environment diagnostics
+    update [--check]           refresh @main sources to latest
     query  [--wiki] <q>        (stub) list pages matching a term
     ask    <question> [--wiki] answer a question by reading the compiled wiki
 """
@@ -38,6 +39,7 @@ from wiki_weaver.lib import (
     lint,
     preflight,
     query,
+    update,
 )
 
 __all__ = [
@@ -55,6 +57,7 @@ __all__ = [
     "ingest",
     "lint",
     "doctor",
+    "update",
     "query",
     "ask",
 ]
@@ -125,6 +128,10 @@ def cmd_lint(args: argparse.Namespace) -> int:
 
 def cmd_doctor(args: argparse.Namespace) -> int:
     return doctor(wiki=args.wiki)
+
+
+def cmd_update(args: argparse.Namespace) -> int:
+    return update(check_only=args.check)
 
 
 def cmd_query(args: argparse.Namespace) -> int:
@@ -208,6 +215,29 @@ def main() -> None:
         "--wiki", default=None, help="also check this wiki's structure"
     )
 
+    p_update = sub.add_parser(
+        "update",
+        help=(
+            "refresh wiki-weaver and its @main engine sources to latest "
+            "(Layer 1: uv reinstall; Layer 2: engine bundle re-clone)"
+        ),
+    )
+    p_update.add_argument(
+        "--check",
+        action="store_true",
+        help=(
+            "detect and report drift only — ls-remote each @main source and compare "
+            "to local commit; no reinstall, no rmtree (safe, read-only)"
+        ),
+    )
+    # --dry-run is an alias for --check (spec names both)
+    p_update.add_argument(
+        "--dry-run",
+        dest="check",
+        action="store_true",
+        help="alias for --check",
+    )
+
     p_query = sub.add_parser(
         "query",
         help="naive substring page search; for real cited answers use 'ask'",
@@ -234,6 +264,7 @@ def main() -> None:
         "ingest": cmd_ingest,
         "lint": cmd_lint,
         "doctor": cmd_doctor,
+        "update": cmd_update,
         "query": cmd_query,
         "ask": cmd_ask,
     }

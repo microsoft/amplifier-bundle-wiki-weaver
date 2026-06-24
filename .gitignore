@@ -6,6 +6,13 @@ runs/
 wiki/        # generated wiki output from pipeline runs
 *.log
 
+# uv.lock is intentionally NOT committed: wiki-weaver tracks @main of its runtime
+# deps (amplifier-foundation, amplifier-unified-llm-client) so they stay in
+# lockstep with the user's Amplifier ecosystem. Committing a lock file would
+# silently freeze those deps at stale commits for every `uv sync` user.
+# Use `wiki-weaver update` to refresh to latest @main.
+uv.lock
+
 # OS/environment files (must stay untracked)
 .DS_Store
 ._*

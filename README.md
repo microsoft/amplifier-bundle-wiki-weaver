@@ -43,12 +43,34 @@ runtime libraries so it stays in lockstep with your ecosystem, and it uses your 
 install at runtime for provider keys and the engine bundle cache. (Equivalently, run it from a
 clone as `python -m wiki_weaver <command>`.)
 
-Because it tracks `@main`, update it the same way you would any uv tool — this re-fetches the
-latest `wiki-weaver` and its `@main` runtime libraries:
+**Strategy: track `@main`, fix-forward — no version pinning.** wiki-weaver intentionally does
+not commit a `uv.lock` (see `.gitignore`): the lock would silently freeze runtime deps at stale
+commits for every `uv sync` user, which defeats the point of tracking `@main`.
+
+### Keeping wiki-weaver current
+
+Use the built-in `update` command — it's the canonical way to refresh both layers:
 
 ```bash
-uv tool upgrade wiki-weaver
+# Check for drift (ls-remote each @main source; no changes made):
+wiki-weaver update --check
+
+# Apply updates:
+#   Layer 1 — reinstall wiki-weaver + wheel deps (amplifier-foundation, unified-llm-client)
+#   Layer 2 — re-clone engine bundles in ~/.amplifier/cache/bundles
+wiki-weaver update
+
+# Confirm what you're running after update:
+wiki-weaver doctor
 ```
+
+`update` verifies that packages actually moved to the new remote commit after reinstall.
+If uv served a stale cache, it escalates through a ladder (`--no-cache`, then
+`uv cache clean`) and exits non-zero with a diagnostic if the package still didn't update —
+so you're never silently left running stale code.
+
+`doctor` now also prints the resolved `@main` commits for all sources (no network needed) so
+you always have a "what am I actually running" record without a committed lock file.
 
 Every command runs a fast preflight first and **fails loud and clean** — with a clear message,
 no traceback — if the environment is missing a prerequisite (runtime, provider key, or the
@@ -92,7 +114,8 @@ way afterward.
 | `ingest --wiki <dir>` | Drain `<dir>/_inbox/` into the wiki, synthesizing/updating pages and archiving each source on convergence. Flags: `--source <file>` (one file), `--max-cycles N`, `--keep-going`. |
 | `ask "<question>" --wiki <dir>` | Answer a question by reading the compiled wiki; cites pages used and refuses when the topic is absent. `--json` for structured output. |
 | `lint --wiki <dir>` | Run the structural validator (links, orphans, frontmatter, provenance). Exit 0 = PASS. |
-| `doctor [--wiki <dir>]` | Environment + (optional) wiki-structure diagnostics. |
+| `doctor [--wiki <dir>]` | Environment + (optional) wiki-structure diagnostics. Also prints resolved `@main` commits for all sources (your lock-file replacement). |
+| `update [--check]` | Refresh wiki-weaver to latest `@main`: reinstall the tool (Layer 1) and re-clone engine bundles (Layer 2). `--check`/`--dry-run` = report drift only, no changes. |
 
 > `query` exists but is a naive substring grep over page text — a minimal stub, **not** the
 > query surface. Use `ask` to query a wiki.
