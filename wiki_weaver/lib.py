@@ -501,26 +501,29 @@ def _collision_safe_move(src: Path, dest_dir: Path) -> Path:
 
 
 def _looks_like_text(path: Path) -> bool:
-    """Return True if *path* appears to be a UTF-8 text file.
+    """Return True unless *path* is binary, using git's heuristic: a file is
+    binary iff it contains a NUL byte.
 
-    Reads up to 8 KB and applies two cheap binary checks:
-    - A NUL byte (``\\x00``) anywhere in the sample → binary.
-    - Failure to decode the sample as UTF-8 → binary.
+    Scans the whole file in 64 KB chunks (ingest sources are read in full by the
+    engine downstream anyway, so this costs nothing next to the LLM pass) and
+    stops at the first NUL.  Deliberately encoding-agnostic -- it does NOT decode
+    the bytes.
 
-    Both checks cover the vast majority of common binary formats (images,
-    archives, executables, compiled blobs).  All plain-text source files
-    (.md, .py, .rs, .go, .yaml, .toml, .txt, etc.) pass both checks cleanly.
+    History: an earlier version decoded an 8 KB head *slice* as UTF-8 and treated
+    a decode error as "binary".  But a multi-byte UTF-8 character straddling the
+    8 KB cut raises UnicodeDecodeError, so valid UTF-8 text with long lines was
+    silently misclassified as binary and dropped.  NUL-sniffing the whole file
+    has no boundary hazard, accepts text in any encoding (UTF-8, latin-1, ...),
+    and still rejects real binaries (images, archives, executables, UTF-16) since
+    those carry NUL bytes.  Genuinely mis-encoded input is surfaced loudly
+    downstream, not hidden here.
     """
-    _SAMPLE = 8192
     try:
-        sample = path.read_bytes()[:_SAMPLE]
+        with path.open("rb") as fh:
+            while chunk := fh.read(65536):
+                if b"\x00" in chunk:
+                    return False
     except OSError:
-        return False
-    if b"\x00" in sample:
-        return False
-    try:
-        sample.decode("utf-8")
-    except UnicodeDecodeError:
         return False
     return True
 
@@ -843,13 +846,26 @@ def ingest(
             # Drain mode: always continue (never halt on non-convergence).
 
     _print_summary(summary_drain)
-    # Fail-loud after the drain: nonzero if anything went to _failed/.
-    failed_n = sum(
-        1
-        for _, s in summary_drain
+    # Fail-loud after the drain: surface anything routed to _failed/ as a
+    # distinct, un-missable block (not merely a yellow bullet in the summary) so
+    # silently-dropped sources cannot slip past the operator.
+    failed_items = [
+        (n, s)
+        for n, s in summary_drain
         if s in {"error", "not-converged", "tampered", "binary"}
-    )
-    return 1 if failed_n else 0
+    ]
+    if failed_items:
+        print(
+            f"\n{RED}!! {len(failed_items)} source(s) were NOT added to the wiki"
+            f" -- moved to {failed_dir}{RESET}"
+        )
+        for n, s in failed_items:
+            print(f"{RED}   - {n}  ({s}){RESET}")
+        print(
+            f"{RED}   review these, fix, and re-drop into _inbox/ to retry,"
+            f" or remove them.{RESET}"
+        )
+    return 1 if failed_items else 0
 
 
 # ---------------------------------------------------------------------------
