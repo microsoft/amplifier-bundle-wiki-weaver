@@ -343,15 +343,28 @@ def build_dot(
 async def _resolve_agent_bundle(agent_name: str, config: dict[str, Any]) -> Any:
     """Resolve a per-node agent into a full, self-contained child Bundle.
 
-    The attractor-pipeline bundle declares its child agents as lazy references
-    (``{"bundle": "attractor:agents/attractor-agent-anthropic"}``) which carry
-    NO inline session. If we spawned an empty child and let ``compose`` fill the
-    blanks, the child would INHERIT the parent's ``loop-pipeline`` orchestrator
-    and re-run the whole DOT (infinite-ish recursion that falls back to the
-    direct backend). So we ``load_bundle`` the referenced agent, which brings
-    its own ``loop-agent`` orchestrator + tools; on spawn that orchestrator
-    overrides the parent's ``loop-pipeline`` (session deep-merge, child wins)
-    while the parent's context-intelligence hook is still inherited.
+    The recursion-avoidance mechanism: every child agent must carry an inline
+    ``session.orchestrator`` set to a NON-pipeline orchestrator (``loop-agent``).
+    Without it the spawned child inherits the parent's ``loop-pipeline``
+    orchestrator and re-runs the whole DOT (infinite recursion; loop-pipeline's
+    spawn guard now fails loud on this). On spawn the child's inline orchestrator
+    deep-merges over the parent's session and the child wins, so it runs a normal
+    single-agent loop; the parent's context-intelligence hook is still inherited
+    through the same merge.
+
+    Two ``config`` shapes are accepted:
+
+    * Inline definition (current) -- a full agent dict carrying its own
+      ``session`` (with the inline ``loop-agent`` orchestrator), ``providers``,
+      ``tools``, ``hooks``, ``instruction``. This is what attractor-pipeline's
+      ``agents:`` block declares today, and it is materialised directly into a
+      ``Bundle`` in the inline branch below.
+    * ``{"bundle": "attractor:agents/<name>"}`` reference (legacy) -- resolved
+      via ``load_bundle``. attractor-pipeline@main no longer emits this form;
+      it was replaced by inline ``session.orchestrator`` declarations in
+      attractor commit ``fd777ed`` (#74, which also added the identity-based
+      recursion guard). The reference branch is retained only for backward
+      compatibility with older agent declarations.
     """
     from amplifier_foundation import load_bundle
 
